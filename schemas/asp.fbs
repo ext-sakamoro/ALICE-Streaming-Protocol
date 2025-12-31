@@ -1,0 +1,278 @@
+// ALICE Streaming Protocol (ASP) - FlatBuffers Schema
+//
+// This schema serves as the official protocol specification.
+// Code generators: flatc --rust --cpp --go --java --python --ts -o src/generated/ schemas/asp.fbs
+//
+// Copyright (c) 2026 Moroya Sakamoto
+// License: MIT (Protocol Specification)
+
+namespace Alice.Asp;
+
+// =============================================================================
+// Enumerations
+// =============================================================================
+
+/// Packet type identifier
+enum PacketType : byte {
+    IPacket = 1,    // Keyframe: Full procedural description
+    DPacket = 2,    // Delta: Incremental updates + motion vectors
+    CPacket = 3,    // Correction: ROI-based pixel corrections
+    SPacket = 4     // Sync: Flow control commands
+}
+
+/// Pattern type for procedural generation
+enum PatternType : byte {
+    Solid = 0,          // Solid color fill
+    GradientLinear = 1, // Linear gradient
+    GradientRadial = 2, // Radial gradient
+    Noise = 3,          // Noise pattern (Perlin, Simplex)
+    Texture = 4,        // Texture reference
+    Dct = 5,            // DCT-based pattern
+    Periodic = 6,       // Periodic/repeating pattern
+    Complex = 7         // Complex pattern (combination)
+}
+
+/// Motion type for animation
+enum MotionType : byte {
+    None = 0,       // No motion
+    Linear = 1,     // Linear motion
+    Easing = 2,     // Easing motion (ease-in, ease-out)
+    Oscillate = 3,  // Oscillating motion
+    Path = 4,       // Complex motion path
+    Physics = 5     // Physics-based motion
+}
+
+/// Region of Interest type
+enum RoiType : byte {
+    General = 0,    // General region
+    Face = 1,       // Face region (high priority)
+    Text = 2,       // Text region
+    Edge = 3,       // Edge/detail region
+    Motion = 4,     // Moving object
+    Custom = 5      // User-defined region
+}
+
+/// Quality level for encoding
+enum QualityLevel : byte {
+    Low = 0,        // Fast encoding, small size
+    Medium = 1,     // Balanced (default)
+    High = 2,       // Slower encoding, better quality
+    Ultra = 3       // Best quality, largest size
+}
+
+/// Sync command type
+enum SyncCommand : byte {
+    RequestKeyframe = 1,    // Request keyframe
+    Ack = 2,                // Acknowledge receipt
+    Nack = 3,               // Report packet loss
+    EndOfStream = 4,        // End of stream
+    BitrateAdjust = 5,      // Bitrate adjustment
+    QualityChange = 6,      // Quality change request
+    Ping = 7,               // Ping/keepalive
+    Pong = 8                // Pong response
+}
+
+/// Compression format for pixel data
+enum CompressionFormat : byte {
+    Raw = 0,        // No compression (raw RGB)
+    Rle = 1,        // Run-length encoding
+    Lz4 = 2,        // LZ4 compression
+    Zstd = 3,       // Zstd compression
+    DeltaRle = 4    // Delta + RLE
+}
+
+/// Easing function type
+enum EasingType : byte {
+    Linear = 0,
+    EaseIn = 1,
+    EaseOut = 2,
+    EaseInOut = 3,
+    Bounce = 4,
+    Elastic = 5
+}
+
+// =============================================================================
+// Structs (Fixed-size, zero-copy accessible)
+// =============================================================================
+
+/// RGB Color (3 bytes)
+struct Color {
+    r: uint8;
+    g: uint8;
+    b: uint8;
+}
+
+/// 2D Point with integer coordinates (8 bytes)
+struct Point {
+    x: int32;
+    y: int32;
+}
+
+/// Rectangle definition (16 bytes)
+struct Rect {
+    x: uint32;
+    y: uint32;
+    width: uint32;
+    height: uint32;
+}
+
+/// Motion vector (12 bytes, optimized for cache)
+/// For 4K video (3840x2160), 16x16 blocks = 240x135 = 32,400 blocks
+/// uint16 range (0-65535) is sufficient for block indices.
+struct MotionVector {
+    block_x: uint16;    // Block X position (supports up to 1M+ pixels at 16px blocks)
+    block_y: uint16;    // Block Y position
+    dx: int16;          // Horizontal displacement
+    dy: int16;          // Vertical displacement
+    sad: uint32;        // Sum of Absolute Differences (matching quality)
+}
+
+/// Compact motion vector for bandwidth-efficient transmission (2 bytes)
+/// Block position is implicit from array index.
+/// SAD is omitted as it's only needed during encoding.
+struct MotionVectorCompact {
+    dx: int8;   // Horizontal displacement (-128 to 127 pixels)
+    dy: int8;   // Vertical displacement
+}
+
+/// DCT coefficient (sparse representation)
+struct DctCoefficient {
+    x: uint16;      // Coefficient X index
+    y: uint16;      // Coefficient Y index
+    value: float32; // Coefficient value
+}
+
+// =============================================================================
+// Tables (Variable-size, forward-compatible)
+// =============================================================================
+
+/// Color palette for procedural generation
+table ColorPalette {
+    colors: [Color];        // Primary colors
+    weights: [float32];     // Color weights (optional)
+}
+
+/// Animation parameters
+table AnimationParams {
+    zoom_factor: float32 = 1.0;     // Zoom factor (1.0 = no zoom)
+    pan_x: float32 = 0.0;           // Pan X offset (percentage of frame width)
+    pan_y: float32 = 0.0;           // Pan Y offset (percentage of frame height)
+    rotation: float32 = 0.0;        // Rotation angle in degrees
+    duration: uint32 = 1;           // Duration in frames
+    easing: EasingType = Linear;    // Easing function type
+}
+
+/// Key-value parameter (for extensibility)
+table Param {
+    key: string;
+    value: float32;
+}
+
+/// Region descriptor for procedural generation
+table RegionDescriptor {
+    bounds: Rect;
+    pattern_type: PatternType = Solid;
+    palette: ColorPalette;
+    dct_coefficients: [DctCoefficient];   // Sparse DCT coefficients
+    texture_id: uint32;                     // For Texture pattern type
+    params: [Param];                        // Additional parameters
+}
+
+/// I-Packet payload: Full frame description (Keyframe)
+table IPacketPayload {
+    width: uint32;
+    height: uint32;
+    fps: float32;
+    quality: QualityLevel = Medium;
+    global_palette: ColorPalette;
+    regions: [RegionDescriptor];
+    animation: AnimationParams;
+    timestamp_ms: uint64;
+}
+
+/// Delta update for a region
+table RegionDelta {
+    region_index: uint32;                   // Reference to I-Packet region
+    palette_delta: ColorPalette;            // Updated palette (if changed)
+    dct_delta: [DctCoefficient];            // Updated DCT coefficients (sparse delta)
+    param_delta: [Param];                   // Updated parameters
+}
+
+/// D-Packet payload: Delta/incremental update
+table DPacketPayload {
+    ref_sequence: uint32;                   // Reference sequence number
+    motion_vectors: [MotionVector];         // Motion vectors (zero-copy access!)
+    motion_vectors_compact: [MotionVectorCompact];  // Compact format (bandwidth optimization)
+    global_motion: AnimationParams;         // Global motion parameters
+    region_deltas: [RegionDelta];           // Region deltas
+    timestamp_ms: uint64;
+}
+
+/// ROI region for correction
+table RoiRegion {
+    bounds: Rect;
+    roi_type: RoiType = General;
+    priority: uint8 = 1;                    // Higher = more important
+    confidence: float32 = 1.0;              // Confidence score (0.0 - 1.0)
+}
+
+/// Correction data for a region
+table CorrectionData {
+    roi: RoiRegion;
+    pixel_delta: [uint8];                   // Pixel data (compressed, delta from procedural)
+    compression: CompressionFormat = Raw;
+}
+
+/// C-Packet payload: Correction data
+table CPacketPayload {
+    ref_sequence: uint32;
+    corrections: [CorrectionData];
+    correction_count: uint32;
+    timestamp_ms: uint64;
+}
+
+/// Sync data variants
+union SyncDataUnion {
+    SequenceData,
+    BitrateData,
+    QualityData,
+    LatencyData,
+    CustomData
+}
+
+table SequenceData { sequence: uint32; }
+table BitrateData { bitrate_kbps: uint32; }
+table QualityData { quality: QualityLevel; }
+table LatencyData { latency_ms: uint32; }
+table CustomData { data: [uint8]; }
+
+/// S-Packet payload: Sync/Control
+table SPacketPayload {
+    command: SyncCommand = Ping;  // Default to Ping (keepalive)
+    data: SyncDataUnion;
+    timestamp_ms: uint64;
+}
+
+/// ASP Packet (unified payload container)
+union AspPayloadUnion {
+    IPacketPayload,
+    DPacketPayload,
+    CPacketPayload,
+    SPacketPayload
+}
+
+/// Root packet structure
+/// Note: Header (16 bytes) is still manual-packed for maximum performance.
+/// This table contains only the payload portion.
+table AspPacketPayload {
+    payload: AspPayloadUnion;
+}
+
+// Root type for file storage and full packet deserialization
+root_type AspPacketPayload;
+
+// File identifier (4 bytes) - matches ASP_MAGIC
+file_identifier "ASP1";
+
+// File extension
+file_extension "asp";

@@ -1,0 +1,43 @@
+[build-system]
+requires = ["maturin>=1.4,<2.0"]
+build-backend = "maturin"
+
+[project]
+name = "libasp"
+version = "1.0.0"
+description = "ALICE Streaming Protocol - High-performance video streaming codec"
+readme = "README.md"
+license = { text = "MIT" }
+authors = [
+    { name = "Moroya Sakamoto", email = "sakamoto@alice-project.dev" }
+]
+keywords = ["video", "streaming", "codec", "alice", "procedural"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.8",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Rust",
+    "Topic :: Multimedia :: Video",
+]
+requires-python = ">=3.8"
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0",
+    "numpy>=1.20",
+]
+
+[project.urls]
+Homepage = "https://github.com/ext-sakamoro/ALICE-Streaming-Protocol"
+Repository = "https://github.com/ext-sakamoro/ALICE-Streaming-Protocol"
+
+[tool.maturin]
+features = ["python"]
+python-source = "python"
+module-name = "libasp"

@@ -1,0 +1,82 @@
+[package]
+name = "libasp"
+version = "1.0.0"
+edition = "2021"
+authors = ["Moroya Sakamoto"]
+description = "ALICE Streaming Protocol - High-performance video streaming codec"
+license = "MIT"
+repository = "https://github.com/ext-sakamoro/ALICE-Streaming-Protocol"
+keywords = ["streaming", "video", "codec", "alice", "procedural"]
+categories = ["multimedia::video", "compression"]
+
+[lib]
+name = "libasp"
+crate-type = ["cdylib", "rlib"]
+
+[features]
+default = ["python"]
+python = ["pyo3", "numpy"]
+wasm = ["wasm-bindgen", "js-sys", "web-sys"]
+simd = []
+bincode-compat = ["dep:bincode"]  # Legacy Rust-only serialization
+
+[dependencies]
+# Serialization - FlatBuffers (required, cross-language, zero-copy)
+flatbuffers = "24.3"
+
+# Serialization - bincode (optional, Rust-only legacy support)
+bincode = { version = "1.3", optional = true }
+
+# Serialization - Common
+serde = { version = "1.0", features = ["derive"] }
+serde_bytes = "0.11"
+base64 = "0.22"
+
+# Numerical computation
+ndarray = { version = "0.16", features = ["serde", "rayon"] }
+num-traits = "0.2"
+num-complex = "0.4"
+
+# Parallel processing
+rayon = "1.10"
+
+# SIMD operations
+wide = "0.7"
+
+# Zero-copy casting
+bytemuck = { version = "1.14", features = ["derive"] }
+
+# Python bindings (optional) - version matched with ALICE-Zip
+pyo3 = { version = "0.23", features = ["extension-module"], optional = true }
+numpy = { version = "0.23", optional = true }
+
+# WebAssembly (optional)
+wasm-bindgen = { version = "0.2", optional = true }
+js-sys = { version = "0.3", optional = true }
+web-sys = { version = "0.3", optional = true, features = ["console"] }
+
+# Error handling
+thiserror = "2.0"
+
+# Logging
+log = "0.4"
+
+[dev-dependencies]
+criterion = { version = "0.5", features = ["html_reports"] }
+proptest = "1.5"
+
+[[bench]]
+name = "motion_estimation"
+harness = false
+
+[profile.release]
+opt-level = 3
+lto = "fat"
+codegen-units = 1
+panic = "abort"
+strip = true
+
+[profile.bench]
+opt-level = 3
+lto = "fat"
+codegen-units = 1
