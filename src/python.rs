@@ -648,6 +648,268 @@ fn version() -> &'static str {
 }
 
 // =============================================================================
+// Hybrid Streaming (SDF Background + Wavelet Person)
+// =============================================================================
+
+use crate::scene::{
+    SdfSceneDescriptor, PersonMask, HybridBandwidthStats,
+    rle_encode_mask, rle_decode_mask,
+};
+use crate::hybrid::{
+    HybridTransmitter, HybridReceiver, HybridFrame,
+    create_person_mask, estimate_savings,
+};
+
+/// RLE encode a binary mask (NumPy zero-copy input).
+///
+/// Args:
+///     mask: Binary mask (H, W) as uint8 NumPy array
+///     width: Frame width
+///     height: Frame height
+///
+/// Returns:
+///     RLE-encoded bytes
+#[pyfunction]
+fn rle_encode_mask_numpy(
+    mask: PyReadonlyArray2<u8>,
+    width: u32,
+    height: u32,
+) -> PyResult<Vec<u8>> {
+    let arr = mask.as_array();
+    let slice = arr.as_slice().ok_or_else(|| {
+        pyo3::exceptions::PyValueError::new_err("Mask must be C-contiguous")
+    })?;
+    Ok(rle_encode_mask(slice, width, height))
+}
+
+/// RLE decode to binary mask (returns NumPy array).
+///
+/// Args:
+///     rle: RLE-encoded bytes
+///     width: Frame width
+///     height: Frame height
+///
+/// Returns:
+///     Binary mask as (H, W) uint8 NumPy array
+#[pyfunction]
+fn rle_decode_mask_numpy<'py>(
+    py: Python<'py>,
+    rle: &[u8],
+    width: u32,
+    height: u32,
+) -> PyResult<Bound<'py, PyArray2<u8>>> {
+    let decoded = rle_decode_mask(rle, width, height);
+    let h = height as usize;
+    let w = width as usize;
+    decoded.into_pyarray(py).reshape([h, w])
+        .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(format!("{:?}", e)))
+}
+
+/// Estimate bandwidth savings for hybrid streaming.
+///
+/// Args:
+///     frame_width: Frame width
+///     frame_height: Frame height
+///     person_coverage: Ratio of person pixels (0.0-1.0)
+///     sdf_scene_bytes: SDF scene size in bytes
+///     wavelet_bpp: Wavelet bits per pixel (default: 1.0)
+///
+/// Returns:
+///     Tuple of (savings_percent, compression_ratio)
+#[pyfunction]
+#[pyo3(signature = (frame_width, frame_height, person_coverage, sdf_scene_bytes, wavelet_bpp=1.0))]
+fn estimate_hybrid_savings(
+    frame_width: u32,
+    frame_height: u32,
+    person_coverage: f32,
+    sdf_scene_bytes: usize,
+    wavelet_bpp: f32,
+) -> (f64, f64) {
+    estimate_savings(frame_width, frame_height, person_coverage, sdf_scene_bytes, wavelet_bpp)
+}
+
+/// Hybrid transmitter for SDF + person streaming.
+#[pyclass]
+#[pyo3(name = "HybridTransmitter")]
+struct PyHybridTransmitter {
+    inner: HybridTransmitter,
+}
+
+#[pymethods]
+impl PyHybridTransmitter {
+    #[new]
+    fn new() -> Self {
+        Self { inner: HybridTransmitter::new() }
+    }
+
+    /// Create a keyframe with SDF scene + person data.
+    ///
+    /// Args:
+    ///     width: Frame width
+    ///     height: Frame height
+    ///     fps: Frames per second
+    ///     asdf_data: ASDF binary blob (SDF scene)
+    ///     person_video: Wavelet-encoded person data
+    ///     person_mask_rle: Optional RLE person mask bytes
+    ///     person_bbox: Optional [x, y, w, h] bounding box
+    ///     foreground_pixels: Number of foreground pixels
+    ///
+    /// Returns:
+    ///     Dict with frame info
+    #[pyo3(signature = (width, height, fps, asdf_data, person_video, person_mask_rle=None, person_bbox=None, foreground_pixels=0))]
+    fn create_keyframe(
+        &mut self,
+        width: u32,
+        height: u32,
+        fps: f32,
+        asdf_data: Vec<u8>,
+        person_video: Vec<u8>,
+        person_mask_rle: Option<Vec<u8>>,
+        person_bbox: Option<Vec<u32>>,
+        foreground_pixels: u32,
+    ) -> PyResult<(u32, bool, usize)> {
+        let scene = SdfSceneDescriptor::new(asdf_data);
+        let mask = match (person_mask_rle, person_bbox) {
+            (Some(rle), Some(bbox)) if bbox.len() == 4 => {
+                let mut m = PersonMask::new([bbox[0], bbox[1], bbox[2], bbox[3]], rle);
+                m.foreground_pixels = foreground_pixels;
+                Some(m)
+            }
+            _ => None,
+        };
+        let frame = self.inner.create_keyframe(width, height, fps, scene, mask, person_video);
+        Ok((frame.sequence, frame.is_keyframe, frame.person_video_data.len()))
+    }
+
+    /// Create a delta frame with optional SDF delta + person update.
+    ///
+    /// Returns:
+    ///     Tuple of (sequence, is_keyframe, person_video_size)
+    #[pyo3(signature = (person_video, timestamp_ms=0, person_mask_rle=None, person_bbox=None, foreground_pixels=0))]
+    fn create_delta_frame(
+        &mut self,
+        person_video: Vec<u8>,
+        timestamp_ms: u64,
+        person_mask_rle: Option<Vec<u8>>,
+        person_bbox: Option<Vec<u32>>,
+        foreground_pixels: u32,
+    ) -> PyResult<(u32, bool, usize)> {
+        let mask = match (person_mask_rle, person_bbox) {
+            (Some(rle), Some(bbox)) if bbox.len() == 4 => {
+                let mut m = PersonMask::new([bbox[0], bbox[1], bbox[2], bbox[3]], rle);
+                m.foreground_pixels = foreground_pixels;
+                Some(m)
+            }
+            _ => None,
+        };
+        let frame = self.inner.create_delta_frame(None, mask, person_video, timestamp_ms);
+        Ok((frame.sequence, frame.is_keyframe, frame.person_video_data.len()))
+    }
+
+    /// Get bandwidth statistics report.
+    fn bandwidth_report(&self) -> String {
+        self.inner.stats().report()
+    }
+
+    /// Get bandwidth savings as (savings_percent, compression_ratio).
+    fn savings(&self) -> (f64, f64) {
+        self.inner.stats().savings()
+    }
+
+    /// Current sequence number.
+    fn sequence(&self) -> u32 {
+        self.inner.sequence()
+    }
+
+    /// Current scene version.
+    fn scene_version(&self) -> u32 {
+        self.inner.scene_version()
+    }
+}
+
+/// Hybrid receiver for SDF + person streaming.
+#[pyclass]
+#[pyo3(name = "HybridReceiver")]
+struct PyHybridReceiver {
+    inner: HybridReceiver,
+}
+
+#[pymethods]
+impl PyHybridReceiver {
+    #[new]
+    fn new() -> Self {
+        Self { inner: HybridReceiver::new() }
+    }
+
+    /// Process a keyframe. Returns (render_sdf, scene_version, person_bbox, person_video_size).
+    #[pyo3(signature = (sequence, width, height, person_video_size, has_scene=true))]
+    fn process_keyframe(
+        &mut self,
+        sequence: u32,
+        width: u32,
+        height: u32,
+        person_video_size: usize,
+        has_scene: bool,
+    ) -> (bool, u32, Option<Vec<u32>>, usize) {
+        let frame = HybridFrame {
+            sequence,
+            timestamp_ms: 0,
+            width,
+            height,
+            sdf_scene: if has_scene {
+                Some(SdfSceneDescriptor::new(vec![b'A', b'S', b'D', b'F',
+                    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]))
+            } else {
+                None
+            },
+            sdf_delta: None,
+            person_mask: None,
+            person_video_data: vec![0; person_video_size],
+            is_keyframe: true,
+        };
+        let instr = self.inner.process_frame(&frame);
+        (
+            instr.render_sdf_background,
+            instr.sdf_scene_version,
+            instr.person_bbox.map(|b| b.to_vec()),
+            instr.person_video_size,
+        )
+    }
+
+    /// Process a delta frame. Returns (render_sdf, scene_version, person_bbox, person_video_size).
+    fn process_delta(
+        &mut self,
+        sequence: u32,
+        timestamp_ms: u64,
+        person_video_size: usize,
+    ) -> (bool, u32, Option<Vec<u32>>, usize) {
+        let frame = HybridFrame {
+            sequence,
+            timestamp_ms,
+            width: 0,
+            height: 0,
+            sdf_scene: None,
+            sdf_delta: None,
+            person_mask: None,
+            person_video_data: vec![0; person_video_size],
+            is_keyframe: false,
+        };
+        let instr = self.inner.process_frame(&frame);
+        (
+            instr.render_sdf_background,
+            instr.sdf_scene_version,
+            instr.person_bbox.map(|b| b.to_vec()),
+            instr.person_video_size,
+        )
+    }
+
+    /// Number of frames received.
+    fn frames_received(&self) -> u32 {
+        self.inner.frames_received()
+    }
+}
+
+// =============================================================================
 // Python Module
 // =============================================================================
 
@@ -678,6 +940,13 @@ fn libasp(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(create_d_packet, m)?)?;
     m.add_function(wrap_pyfunction!(create_d_packet_numpy, m)?)?;
     m.add_function(wrap_pyfunction!(parse_packet, m)?)?;
+
+    // Hybrid streaming (SDF + wavelet person)
+    m.add_function(wrap_pyfunction!(rle_encode_mask_numpy, m)?)?;
+    m.add_function(wrap_pyfunction!(rle_decode_mask_numpy, m)?)?;
+    m.add_function(wrap_pyfunction!(estimate_hybrid_savings, m)?)?;
+    m.add_class::<PyHybridTransmitter>()?;
+    m.add_class::<PyHybridReceiver>()?;
 
     // Utility
     m.add_function(wrap_pyfunction!(version, m)?)?;

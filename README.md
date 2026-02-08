@@ -18,6 +18,50 @@ High-performance video streaming codec written in Rust with Python bindings.
 - **Zero-copy Python bindings**: Direct NumPy array access via PyO3
 - **Bare-metal performance**: Compile-time CRC32 tables, GIL release, buffer reuse
 
+## Hybrid Streaming (SDF + Wavelet Person)
+
+ALICE's hybrid streaming mode separates **SDF-rendered backgrounds** from **wavelet-encoded person video**, achieving massive bandwidth reduction:
+
+```
+Traditional:  Full Frame pixels   → H.265 → 5-10 Mbps
+ALICE Hybrid: SDF background (2-10 KB) + Person wavelet (0.5-2 Mbps)
+              → ~80-95% bandwidth savings
+```
+
+```
+┌─────────────── Transmitter ───────────────┐
+│                                            │
+│  Camera → Segmentation → Person Mask       │
+│              ↓               ↓             │
+│  SDF Scene (2-10KB)   Person Crop          │
+│       ↓                    ↓               │
+│  I-Packet.sdf_scene   Wavelet Encode       │
+│  D-Packet.sdf_delta   C-Packet (face ROI)  │
+│              ↓               ↓             │
+│          ASP Multiplexer → Network         │
+└────────────────────────────────────────────┘
+
+┌─────────────── Receiver ──────────────────┐
+│                                            │
+│  Network → ASP Demultiplexer               │
+│              ↓               ↓             │
+│  SDF Scene              Person Stream      │
+│       ↓                    ↓               │
+│  SDF Render (GPU)     Wavelet Decode       │
+│       ↓                    ↓               │
+│  Background Frame     Person Pixels + Mask │
+│              ↓               ↓             │
+│          Compositor → Display              │
+└────────────────────────────────────────────┘
+```
+
+| Component | Traditional (H.265) | ALICE Hybrid |
+|-----------|--------------------:|-------------:|
+| Background (70-80%) | 3.5-8 Mbps | **2-10 KB** (SDF, once) |
+| Person (20-30%) | 1-2 Mbps | **0.5-2 Mbps** (wavelet) |
+| Mask | N/A | **~300 bytes** (RLE) |
+| **Total** | **5-10 Mbps** | **~0.5-2 Mbps** |
+
 ## Performance Highlights
 
 | Optimization | Improvement |
@@ -26,6 +70,8 @@ High-performance video streaming codec written in Rust with Python bindings.
 | Buffer reuse (streaming) | 77x faster |
 | GIL release for heavy computation | Full Python parallelism |
 | Direct PyArray allocation | Zero intermediate copies |
+| Separable morphology (segmentation) | O(n) vs O(n×r²) |
+| Scan-forward RLE encode/decode | Pre-allocate zeros, skip 70-80% writes |
 
 ## Packet Types
 
@@ -168,6 +214,59 @@ d_packet = libasp.create_d_packet_numpy(sequence=2, ref_sequence=1, motion_vecto
 packet_type, sequence, payload_size = libasp.parse_packet(packet_bytes)
 ```
 
+### Python Hybrid Streaming API
+
+```python
+import numpy as np
+import libasp
+
+# --- Transmitter Side ---
+tx = libasp.HybridTransmitter()
+
+# Create keyframe with SDF scene + person video
+seq, is_key, video_size = tx.create_keyframe(
+    width=1920, height=1080, fps=30.0,
+    asdf_data=sdf_binary_blob,       # ASDF scene description (~5 KB)
+    person_video=wavelet_encoded,     # Wavelet-encoded person region
+    person_mask_rle=rle_mask_bytes,   # RLE-compressed person mask
+    person_bbox=[300, 100, 400, 600], # [x, y, w, h]
+    foreground_pixels=120000,
+)
+
+# Create delta frames (person-only, no SDF update needed)
+for i in range(29):
+    seq, is_key, video_size = tx.create_delta_frame(
+        person_video=next_person_frame,
+        timestamp_ms=i * 33,
+    )
+
+# Check bandwidth savings
+savings_pct, compression_ratio = tx.savings()
+print(tx.bandwidth_report())
+
+# --- Receiver Side ---
+rx = libasp.HybridReceiver()
+render_sdf, scene_ver, bbox, video_size = rx.process_keyframe(
+    sequence=1, width=1920, height=1080,
+    person_video_size=30000, has_scene=True,
+)
+
+# --- RLE Mask Utilities ---
+mask = np.zeros((1080, 1920), dtype=np.uint8)
+mask[100:700, 300:700] = 1
+rle = libasp.rle_encode_mask_numpy(mask, 1920, 1080)
+decoded = libasp.rle_decode_mask_numpy(rle, 1920, 1080)  # (H, W) NumPy
+
+# --- Bandwidth Estimation ---
+savings, ratio = libasp.estimate_hybrid_savings(
+    frame_width=1920, frame_height=1080,
+    person_coverage=0.20,    # 20% of frame is person
+    sdf_scene_bytes=5000,    # 5 KB SDF scene
+    wavelet_bpp=1.0,         # 1 bit per pixel wavelet
+)
+print(f"Savings: {savings:.1f}%, Ratio: {ratio:.1f}x")
+```
+
 ## Benchmarks
 
 Run benchmarks:
@@ -193,8 +292,8 @@ Compile-time generated lookup table provides 2.8-5.3x speedup over table-less im
 
 ```bash
 cargo test --no-default-features
-# running 67 tests
-# test result: ok. 67 passed; 0 failed
+# running 80 tests
+# test result: ok. 80 passed; 0 failed
 ```
 
 ## Architecture
@@ -212,7 +311,9 @@ libasp/
 │   │   ├── dct.rs      # DCT/IDCT transform + quantization
 │   │   ├── color.rs    # Color extraction (k-means, median cut)
 │   │   └── roi.rs      # ROI detection (edge, motion, face)
-│   └── python.rs       # PyO3 + NumPy bindings
+│   ├── scene.rs        # SDF scene channel (descriptor, delta, person mask, RLE)
+│   ├── hybrid.rs       # Hybrid streaming pipeline (SDF + wavelet person)
+│   └── python.rs       # PyO3 + NumPy bindings (motion, color, DCT, ROI, hybrid)
 ├── benches/
 │   └── motion_estimation.rs  # Criterion benchmarks
 └── Cargo.toml

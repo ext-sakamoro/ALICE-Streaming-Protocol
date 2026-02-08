@@ -127,6 +127,8 @@ pub struct IPacketPayload {
     pub animation: Option<AnimationParams>,
     /// Timestamp in milliseconds
     pub timestamp_ms: u64,
+    /// SDF scene descriptor for hybrid streaming (background as SDF)
+    pub sdf_scene: Option<crate::scene::SdfSceneDescriptor>,
 }
 
 impl IPacketPayload {
@@ -140,6 +142,7 @@ impl IPacketPayload {
             regions: Vec::new(),
             animation: None,
             timestamp_ms: 0,
+            sdf_scene: None,
         }
     }
 
@@ -184,6 +187,10 @@ pub struct DPacketPayload {
     pub region_deltas: Vec<RegionDelta>,
     /// Frame timestamp in milliseconds
     pub timestamp_ms: u64,
+    /// SDF scene delta for hybrid streaming (incremental background update)
+    pub sdf_delta: Option<crate::scene::SdfSceneDelta>,
+    /// Person mask for hybrid streaming (foreground segmentation)
+    pub person_mask: Option<crate::scene::PersonMask>,
 }
 
 impl DPacketPayload {
@@ -194,6 +201,8 @@ impl DPacketPayload {
             global_motion: None,
             region_deltas: Vec::new(),
             timestamp_ms: 0,
+            sdf_delta: None,
+            person_mask: None,
         }
     }
 
@@ -599,6 +608,7 @@ impl AspPacket {
                     regions: Vec::new(),
                     animation: None,
                     timestamp_ms: fb.timestamp_ms(),
+                    sdf_scene: None,
                 };
                 AspPayload::IPacket(p)
             }

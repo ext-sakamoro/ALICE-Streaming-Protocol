@@ -116,6 +116,12 @@ pub mod generated;
 /// C++, Go, Java, Python, TypeScript, etc. can all read/write these packets.
 pub mod flatbuffers_api;
 
+/// SDF Scene Channel for hybrid streaming (SDF background + wavelet person)
+pub mod scene;
+
+/// Hybrid Streaming Pipeline (SDF + Codec integration)
+pub mod hybrid;
+
 #[cfg(feature = "python")]
 mod python;
 
@@ -124,6 +130,8 @@ pub use types::*;
 pub use header::*;
 pub use packet::*;
 pub use codec::*;
+pub use scene::*;
+pub use hybrid::*;
 
 /// Library version
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
