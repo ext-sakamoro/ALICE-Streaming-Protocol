@@ -22,6 +22,8 @@ bincode-compat = ["dep:bincode"]  # Legacy Rust-only serialization
 codec = ["dep:alice-codec"]       # ALICE-Codec (wavelet + rANS) integration
 voice = ["dep:alice-voice"]       # ALICE-Voice (LPC parametric) integration
 media-stack = ["codec", "voice"]  # Full A/V media pipeline
+sync = ["dep:alice-sync"]         # ALICE-Sync events embedded in ASP packets
+physics = ["dep:alice-physics"]   # Physics state delta → D-packets
 
 [dependencies]
 # Serialization - FlatBuffers (required, cross-language, zero-copy)
@@ -61,6 +63,8 @@ web-sys = { version = "0.3", optional = true, features = ["console"] }
 # ALICE Media Stack (optional)
 alice-codec = { path = "../ALICE-Codec", optional = true, default-features = false, features = ["std"] }
 alice-voice = { path = "../ALICE-Voice", optional = true, default-features = false, features = ["std"] }
+alice-sync = { path = "../ALICE-Sync", optional = true, default-features = false, features = ["std"] }
+alice-physics = { path = "../ALICE-Physics", optional = true, default-features = false, features = ["std"] }
 
 # Error handling
 thiserror = "2.0"

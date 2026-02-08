@@ -125,6 +125,10 @@ pub mod hybrid;
 /// ALICE Media Stack (codec + voice integration)
 #[cfg(any(feature = "codec", feature = "voice"))]
 pub mod media;
+#[cfg(feature = "sync")]
+pub mod sync_bridge;
+#[cfg(feature = "physics")]
+pub mod physics_bridge;
 
 #[cfg(feature = "python")]
 mod python;

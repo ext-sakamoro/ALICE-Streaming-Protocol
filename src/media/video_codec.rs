@@ -186,6 +186,9 @@ impl VideoEncoder {
 #[derive(Debug)]
 pub struct VideoDecoder {
     wavelet: Wavelet2D,
+    decode_y_buffer: Vec<i16>,
+    decode_co_buffer: Vec<i16>,
+    decode_cg_buffer: Vec<i16>,
 }
 
 impl VideoDecoder {
@@ -198,6 +201,9 @@ impl VideoDecoder {
         };
         Self {
             wavelet: Wavelet2D::new(w1d),
+            decode_y_buffer: Vec::new(),
+            decode_co_buffer: Vec::new(),
+            decode_cg_buffer: Vec::new(),
         }
     }
 
@@ -234,13 +240,16 @@ impl VideoDecoder {
             || decode_channel(wavelet, &bs_cg, &cg_hist, n, cg_min, cg_scale, q_step_cg, w, h),
         );
 
-        // 2. YCoCg-R → RGB (in-place i32→i16 conversion)
-        let y_i16: Vec<i16> = y_i32.iter().map(|&v| v as i16).collect();
-        let co_i16: Vec<i16> = co_i32.iter().map(|&v| v as i16).collect();
-        let cg_i16: Vec<i16> = cg_i32.iter().map(|&v| v as i16).collect();
+        // 2. YCoCg-R → RGB (in-place i32→i16 conversion, reuse buffers)
+        self.decode_y_buffer.clear();
+        self.decode_y_buffer.extend(y_i32.iter().map(|&v| v as i16));
+        self.decode_co_buffer.clear();
+        self.decode_co_buffer.extend(co_i32.iter().map(|&v| v as i16));
+        self.decode_cg_buffer.clear();
+        self.decode_cg_buffer.extend(cg_i32.iter().map(|&v| v as i16));
 
         let mut rgb_out = vec![RGB { r: 0, g: 0, b: 0 }; n];
-        ycocg_r_to_rgb(&y_i16, &co_i16, &cg_i16, &mut rgb_out);
+        ycocg_r_to_rgb(&self.decode_y_buffer, &self.decode_co_buffer, &self.decode_cg_buffer, &mut rgb_out);
 
         // 3. RGB struct → flat bytes (pre-allocated)
         let mut rgb_bytes = Vec::with_capacity(n * 3);

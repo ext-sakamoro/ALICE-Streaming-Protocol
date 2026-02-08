@@ -461,6 +461,21 @@ media-stack = ["codec", "voice"]  # Full media stack
 
 **Attribution**: Free encoder users must include "Streamed via ALICE Protocol (ASP)" in stream metadata.
 
+## Cross-Crate Bridges
+
+libasp connects to other ALICE ecosystem crates via feature-gated bridge modules:
+
+| Bridge | Feature | Target Crate | Description |
+|--------|---------|--------------|-------------|
+| `physics_bridge` | `physics` | [ALICE-Physics](../ALICE-Physics) | Encodes physics body state deltas as ASP D-packets for streaming deterministic physics |
+| `sync_bridge` | `sync` | [ALICE-Sync](../ALICE-Sync) | Real-time sync of ASP streams via ALICE-Sync CRDT |
+
+### Recent Performance Improvements
+
+| Module | Change | Impact |
+|--------|--------|--------|
+| `video_codec.rs` | Pre-allocated decode buffers for YCoCg conversion | >99% allocation reduction (360 MB/sec to near-zero for 1080p@30fps) |
+
 ## Related Projects
 
 | Project | Description |
