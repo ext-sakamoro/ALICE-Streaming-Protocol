@@ -81,6 +81,20 @@ enum CompressionFormat : byte {
     DeltaRle = 4    // Delta + RLE
 }
 
+/// Audio encoding layer type
+enum AudioLayerType : byte {
+    Parametric = 1,     // L2: LPC + Pitch + Formants (100-600x)
+    Spectral = 2        // L1: DCT/FFT coefficients (10-50x)
+}
+
+/// Audio quality level
+enum AudioQuality : byte {
+    Narrowband = 0,     // 8 kHz
+    Wideband = 1,       // 16 kHz (default)
+    SuperWideband = 2,  // 32 kHz
+    Fullband = 3        // 48 kHz
+}
+
 /// Easing function type
 enum EasingType : byte {
     Linear = 0,
@@ -253,12 +267,35 @@ table SPacketPayload {
     timestamp_ms: uint64;
 }
 
+// =============================================================================
+// Audio Frames (ALICE-Voice integration)
+// =============================================================================
+
+/// Audio frame carrying encoded voice/audio parameters
+table AudioFrame {
+    sequence: uint32;
+    timestamp_ms: uint64;
+    layer_type: AudioLayerType = Parametric;
+    quality: AudioQuality = Wideband;
+    sample_rate: uint32;
+    frame_size: uint32;
+    payload: [uint8];               // Serialized audio parameters
+    is_keyframe: bool = false;
+}
+
+/// Audio packet payload (one or more audio frames)
+table AudioPacketPayload {
+    frames: [AudioFrame];
+    channel_count: uint8 = 1;       // Mono by default
+}
+
 /// ASP Packet (unified payload container)
 union AspPayloadUnion {
     IPacketPayload,
     DPacketPayload,
     CPacketPayload,
-    SPacketPayload
+    SPacketPayload,
+    AudioPacketPayload
 }
 
 /// Root packet structure

@@ -44,7 +44,7 @@ use crate::scene::{
 };
 use serde::{Deserialize, Serialize};
 
-/// Hybrid frame: combines SDF background + person video data
+/// Hybrid frame: combines SDF background + person video + audio data
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct HybridFrame {
     /// Frame sequence number
@@ -62,6 +62,8 @@ pub struct HybridFrame {
     pub person_mask: Option<PersonMask>,
     /// Person video data (wavelet-encoded, only the person region)
     pub person_video_data: Vec<u8>,
+    /// Audio data (encoded voice/audio parameters, empty if no audio)
+    pub audio_data: Vec<u8>,
     /// Whether this is a keyframe
     pub is_keyframe: bool,
 }
@@ -87,10 +89,10 @@ impl HybridTransmitter {
         }
     }
 
-    /// Create a keyframe I-Packet with SDF scene + initial person data.
+    /// Create a keyframe I-Packet with SDF scene + initial person data + optional audio.
     ///
     /// This is sent at the start of a stream or on scene changes.
-    /// Contains the full SDF scene description + first person frame.
+    /// Contains the full SDF scene description + first person frame + audio.
     pub fn create_keyframe(
         &mut self,
         width: u32,
@@ -99,6 +101,22 @@ impl HybridTransmitter {
         sdf_scene: SdfSceneDescriptor,
         person_mask: Option<PersonMask>,
         person_video: Vec<u8>,
+    ) -> HybridFrame {
+        self.create_keyframe_av(width, height, _fps, sdf_scene, person_mask, person_video, Vec::new())
+    }
+
+    /// Create a keyframe with audio/video.
+    ///
+    /// Same as `create_keyframe` but also carries audio data.
+    pub fn create_keyframe_av(
+        &mut self,
+        width: u32,
+        height: u32,
+        _fps: f32,
+        sdf_scene: SdfSceneDescriptor,
+        person_mask: Option<PersonMask>,
+        person_video: Vec<u8>,
+        audio_data: Vec<u8>,
     ) -> HybridFrame {
         self.sequence += 1;
         self.scene_version = sdf_scene.scene_version;
@@ -109,13 +127,15 @@ impl HybridTransmitter {
             self.stats.person_mask_bytes += mask.mask_size();
         }
         self.stats.person_video_bytes += person_video.len();
+        self.stats.audio_bytes += audio_data.len();
         self.stats.frame_width = width;
         self.stats.frame_height = height;
         self.stats.frame_count += 1;
 
         let hybrid_size = sdf_scene.asdf_size()
             + person_mask.as_ref().map_or(0, |m| m.mask_size())
-            + person_video.len();
+            + person_video.len()
+            + audio_data.len();
         self.stats.hybrid_total_bytes += hybrid_size;
         // Estimate traditional: raw frame ≈ width × height × 3 / 20 (H.265 ~20:1)
         self.stats.traditional_total_bytes += (width * height * 3 / 20) as usize;
@@ -129,6 +149,7 @@ impl HybridTransmitter {
             sdf_delta: None,
             person_mask,
             person_video_data: person_video,
+            audio_data,
             is_keyframe: true,
         }
     }
@@ -144,6 +165,20 @@ impl HybridTransmitter {
         person_video: Vec<u8>,
         timestamp_ms: u64,
     ) -> HybridFrame {
+        self.create_delta_frame_av(sdf_delta, person_mask, person_video, Vec::new(), timestamp_ms)
+    }
+
+    /// Create a delta frame with audio/video.
+    ///
+    /// Same as `create_delta_frame` but also carries audio data.
+    pub fn create_delta_frame_av(
+        &mut self,
+        sdf_delta: Option<SdfSceneDelta>,
+        person_mask: Option<PersonMask>,
+        person_video: Vec<u8>,
+        audio_data: Vec<u8>,
+        timestamp_ms: u64,
+    ) -> HybridFrame {
         self.sequence += 1;
 
         if let Some(ref delta) = sdf_delta {
@@ -154,11 +189,13 @@ impl HybridTransmitter {
             self.stats.person_mask_bytes += mask.mask_size();
         }
         self.stats.person_video_bytes += person_video.len();
+        self.stats.audio_bytes += audio_data.len();
         self.stats.frame_count += 1;
 
         let hybrid_size = sdf_delta.as_ref().map_or(0, |d| d.delta_size())
             + person_mask.as_ref().map_or(0, |m| m.mask_size())
-            + person_video.len();
+            + person_video.len()
+            + audio_data.len();
         self.stats.hybrid_total_bytes += hybrid_size;
         self.stats.traditional_total_bytes +=
             (self.stats.frame_width * self.stats.frame_height * 3 / 20) as usize;
@@ -172,6 +209,7 @@ impl HybridTransmitter {
             sdf_delta,
             person_mask,
             person_video_data: person_video,
+            audio_data,
             is_keyframe: false,
         }
     }
@@ -444,6 +482,7 @@ mod tests {
             sdf_delta: None,
             person_mask: Some(mask),
             person_video_data: vec![0; 10_000],
+            audio_data: Vec::new(),
             is_keyframe: true,
         };
 
@@ -466,6 +505,7 @@ mod tests {
             sdf_delta: None,
             person_mask: None,
             person_video_data: vec![0; 8_000],
+            audio_data: Vec::new(),
             is_keyframe: false,
         };
 
@@ -506,6 +546,7 @@ mod tests {
             sdf_delta_bytes: 1_000,
             person_mask_bytes: 600,
             person_video_bytes: 240_000,
+            audio_bytes: 0,
             hybrid_total_bytes: 246_600,
             traditional_total_bytes: 3_110_400,
             frame_width: 1920,

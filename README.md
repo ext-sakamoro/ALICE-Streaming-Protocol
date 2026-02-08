@@ -62,6 +62,90 @@ ALICE Hybrid: SDF background (2-10 KB) + Person wavelet (0.5-2 Mbps)
 | Mask | N/A | **~300 bytes** (RLE) |
 | **Total** | **5-10 Mbps** | **~0.5-2 Mbps** |
 
+## Media Stack (Codec + Voice Integration)
+
+With the `media-stack` feature, libasp integrates [ALICE-Codec](https://github.com/ext-sakamoro/ALICE-Codec) and [ALICE-Voice](https://github.com/ext-sakamoro/ALICE-Voice) for end-to-end media encoding/decoding within the ASP transport layer.
+
+```toml
+[dependencies]
+libasp = { version = "1.0", features = ["media-stack"] }
+# Or individually:
+# libasp = { version = "1.0", features = ["codec"] }   # Video only
+# libasp = { version = "1.0", features = ["voice"] }   # Voice only
+```
+
+### Video Codec Pipeline
+
+```
+RGB → YCoCg-R → 2D CDF 9/7 Wavelet → Quantize → rANS → Bitstream
+                                                          ↓
+Bitstream → rANS Decode → Dequantize → Inverse Wavelet → YCoCg-R⁻¹ → RGB
+```
+
+- **3-channel Rayon parallel**: Y/Co/Cg planes encoded simultaneously via `rayon::join`
+- **Quality control**: `quality` parameter (0-100) maps to quantization step
+- **rANS entropy coding**: Near-Shannon-limit compression
+
+```rust
+use libasp::media::{VideoCodec, VideoCodecConfig};
+
+let config = VideoCodecConfig { quality: 75, ..Default::default() };
+let mut codec = VideoCodec::new(config);
+
+// Encode (Rayon parallel 3-channel)
+let compressed = codec.encode_frame(&rgb_data, width, height)?;
+
+// Decode
+let reconstructed = codec.decode_frame(&compressed)?;
+```
+
+### Voice Codec Pipeline
+
+```
+PCM f32 → LPC Analysis → Parametric/Spectral Params → Serialized AudioFrame
+                                                        ↓
+AudioFrame → Deserialize → LPC Synthesis → PCM f32
+```
+
+- **L1 Spectral**: 10-50x compression (high quality)
+- **L2 Parametric**: 100-600x compression (voice-optimized)
+- **Batch API**: `encode_batch()` for processing multiple frames
+
+```rust
+use libasp::media::{AudioCodec, AudioCodecConfig};
+
+let config = AudioCodecConfig::default(); // 16kHz, LPC order 10
+let mut codec = AudioCodec::new(config);
+
+// Encode voice frame
+let frame = codec.encode_parametric(&audio_samples, timestamp)?;
+
+// Batch encode
+let frames = codec.encode_batch(&frame_slices, &timestamps);
+
+// Decode
+let reconstructed = codec.decode(&frame)?;
+```
+
+### Python Media Bindings (GIL Release + Zero-Copy)
+
+```python
+import numpy as np
+import libasp
+
+# Video: encode/decode with NumPy zero-copy
+rgb = np.array(frame_data, dtype=np.uint8)
+compressed = libasp.encode_video_frame(rgb, width, height, quality=75)
+reconstructed = libasp.decode_video_frame(compressed)
+
+# Voice: encode/decode
+audio = np.array(samples, dtype=np.float32)
+frame = libasp.encode_voice(audio, sample_rate=16000)
+decoded = libasp.decode_voice(frame)
+```
+
+All media Python bindings use `py.allow_threads` for full GIL release during computation.
+
 ## Performance Highlights
 
 | Optimization | Improvement |
@@ -72,6 +156,8 @@ ALICE Hybrid: SDF background (2-10 KB) + Person wavelet (0.5-2 Mbps)
 | Direct PyArray allocation | Zero intermediate copies |
 | Separable morphology (segmentation) | O(n) vs O(n×r²) |
 | Scan-forward RLE encode/decode | Pre-allocate zeros, skip 70-80% writes |
+| Rayon parallel 3-channel video encode/decode | 3x throughput (Y/Co/Cg) |
+| Voice batch API (`encode_batch`) | FFI amortization |
 
 ## Packet Types
 
@@ -292,8 +378,8 @@ Compile-time generated lookup table provides 2.8-5.3x speedup over table-less im
 
 ```bash
 cargo test --no-default-features
-# running 80 tests
-# test result: ok. 80 passed; 0 failed
+# running 88 tests
+# test result: ok. 88 passed; 0 failed
 ```
 
 ## Architecture
@@ -313,7 +399,11 @@ libasp/
 │   │   └── roi.rs      # ROI detection (edge, motion, face)
 │   ├── scene.rs        # SDF scene channel (descriptor, delta, person mask, RLE)
 │   ├── hybrid.rs       # Hybrid streaming pipeline (SDF + wavelet person)
-│   └── python.rs       # PyO3 + NumPy bindings (motion, color, DCT, ROI, hybrid)
+│   ├── media/
+│   │   ├── mod.rs      # Media stack module (feature-gated)
+│   │   ├── video_codec.rs  # Video codec (alice-codec wrapper, Rayon parallel)
+│   │   └── voice_codec.rs  # Voice codec (alice-voice wrapper, batch API)
+│   └── python.rs       # PyO3 + NumPy bindings (motion, color, DCT, ROI, hybrid, media)
 ├── benches/
 │   └── motion_estimation.rs  # Criterion benchmarks
 └── Cargo.toml
@@ -350,9 +440,12 @@ pub struct MotionVectorCompact {
 ```toml
 [features]
 default = ["python"]
-python = ["pyo3", "numpy"]   # Python bindings
-wasm = ["wasm-bindgen"]      # WebAssembly support
-simd = []                    # Explicit SIMD (auto-detected)
+python = ["pyo3", "numpy"]        # Python bindings
+wasm = ["wasm-bindgen"]           # WebAssembly support
+simd = []                         # Explicit SIMD (auto-detected)
+codec = ["alice-codec"]           # Video codec (3D wavelet + rANS)
+voice = ["alice-voice"]           # Voice codec (LPC parametric)
+media-stack = ["codec", "voice"]  # Full media stack
 ```
 
 ## License

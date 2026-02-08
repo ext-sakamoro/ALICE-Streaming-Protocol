@@ -283,6 +283,8 @@ pub struct HybridBandwidthStats {
     pub person_mask_bytes: usize,
     /// Person video data size (bytes, wavelet encoded)
     pub person_video_bytes: usize,
+    /// Audio data size (bytes, LPC/spectral encoded)
+    pub audio_bytes: usize,
     /// Total hybrid stream size (bytes)
     pub hybrid_total_bytes: usize,
     /// Estimated traditional full-frame size (bytes)
@@ -320,6 +322,7 @@ impl HybridBandwidthStats {
              SDF Deltas:     {:>8} bytes ({:.1} KB)\n\
              Person Mask:    {:>8} bytes ({:.1} KB)\n\
              Person Video:   {:>8} bytes ({:.1} KB)\n\
+             Audio:          {:>8} bytes ({:.1} KB)\n\
              ─────────────────────────────\n\
              Hybrid Total:   {:>8} bytes ({:.1} KB)\n\
              Traditional:    {:>8} bytes ({:.1} KB)\n\
@@ -330,6 +333,7 @@ impl HybridBandwidthStats {
             self.sdf_delta_bytes, self.sdf_delta_bytes as f64 / 1024.0,
             self.person_mask_bytes, self.person_mask_bytes as f64 / 1024.0,
             self.person_video_bytes, self.person_video_bytes as f64 / 1024.0,
+            self.audio_bytes, self.audio_bytes as f64 / 1024.0,
             self.hybrid_total_bytes, self.hybrid_total_bytes as f64 / 1024.0,
             self.traditional_total_bytes, self.traditional_total_bytes as f64 / 1024.0,
             savings, ratio,
@@ -430,6 +434,7 @@ mod tests {
             sdf_delta_bytes: 500,         // 500 bytes deltas
             person_mask_bytes: 300,       // 300 bytes mask
             person_video_bytes: 50_000,   // 50 KB person video
+            audio_bytes: 0,
             hybrid_total_bytes: 55_800,   // total
             traditional_total_bytes: 500_000, // 500 KB traditional
             frame_width: 1920,

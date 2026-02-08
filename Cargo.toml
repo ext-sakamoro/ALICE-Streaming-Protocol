@@ -19,6 +19,9 @@ python = ["pyo3", "numpy"]
 wasm = ["wasm-bindgen", "js-sys", "web-sys"]
 simd = []
 bincode-compat = ["dep:bincode"]  # Legacy Rust-only serialization
+codec = ["dep:alice-codec"]       # ALICE-Codec (wavelet + rANS) integration
+voice = ["dep:alice-voice"]       # ALICE-Voice (LPC parametric) integration
+media-stack = ["codec", "voice"]  # Full A/V media pipeline
 
 [dependencies]
 # Serialization - FlatBuffers (required, cross-language, zero-copy)
@@ -54,6 +57,10 @@ numpy = { version = "0.23", optional = true }
 wasm-bindgen = { version = "0.2", optional = true }
 js-sys = { version = "0.3", optional = true }
 web-sys = { version = "0.3", optional = true, features = ["console"] }
+
+# ALICE Media Stack (optional)
+alice-codec = { path = "../ALICE-Codec", optional = true, default-features = false, features = ["std"] }
+alice-voice = { path = "../ALICE-Voice", optional = true, default-features = false, features = ["std"] }
 
 # Error handling
 thiserror = "2.0"

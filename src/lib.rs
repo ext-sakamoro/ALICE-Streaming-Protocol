@@ -122,6 +122,10 @@ pub mod scene;
 /// Hybrid Streaming Pipeline (SDF + Codec integration)
 pub mod hybrid;
 
+/// ALICE Media Stack (codec + voice integration)
+#[cfg(any(feature = "codec", feature = "voice"))]
+pub mod media;
+
 #[cfg(feature = "python")]
 mod python;
 
@@ -132,6 +136,8 @@ pub use packet::*;
 pub use codec::*;
 pub use scene::*;
 pub use hybrid::*;
+#[cfg(any(feature = "codec", feature = "voice"))]
+pub use media::*;
 
 /// Library version
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");

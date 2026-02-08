@@ -865,6 +865,7 @@ impl PyHybridReceiver {
             sdf_delta: None,
             person_mask: None,
             person_video_data: vec![0; person_video_size],
+            audio_data: Vec::new(),
             is_keyframe: true,
         };
         let instr = self.inner.process_frame(&frame);
@@ -892,6 +893,7 @@ impl PyHybridReceiver {
             sdf_delta: None,
             person_mask: None,
             person_video_data: vec![0; person_video_size],
+            audio_data: Vec::new(),
             is_keyframe: false,
         };
         let instr = self.inner.process_frame(&frame);
@@ -906,6 +908,201 @@ impl PyHybridReceiver {
     /// Number of frames received.
     fn frames_received(&self) -> u32 {
         self.inner.frames_received()
+    }
+}
+
+// =============================================================================
+// Media Stack: Video Codec (feature = "codec")
+// =============================================================================
+
+#[cfg(feature = "codec")]
+use crate::media::video_codec::{VideoEncoder, VideoDecoder, VideoCodecConfig, WaveletType};
+
+/// Encode an RGB frame using ALICE-Codec (wavelet + rANS).
+///
+/// Args:
+///     frame: RGB frame (H, W, 3) as uint8 NumPy array
+///     quality: Quality 1-100 (default: 75)
+///     wavelet: Wavelet type "cdf97", "cdf53", "haar" (default: "cdf97")
+///
+/// Returns:
+///     Compressed bytes
+#[cfg(feature = "codec")]
+#[pyfunction]
+#[pyo3(signature = (frame, quality=75, wavelet="cdf97"))]
+fn encode_video_frame(
+    py: Python<'_>,
+    frame: PyReadonlyArray2<u8>,
+    quality: u8,
+    wavelet: &str,
+) -> PyResult<Py<PyBytes>> {
+    let arr = frame.as_array();
+    let shape = arr.shape();
+    // Expect (H*W, 3) or flat (H*W*3,) — we accept (N, 3)
+    if shape.len() != 2 || shape[1] != 3 {
+        return Err(pyo3::exceptions::PyValueError::new_err(
+            "Frame must be (H*W, 3) uint8 array. Reshape your (H, W, 3) frame to (-1, 3) first."
+        ));
+    }
+    let slice = arr.as_slice().ok_or_else(|| {
+        pyo3::exceptions::PyValueError::new_err("Frame must be C-contiguous")
+    })?;
+
+    let wt = match wavelet {
+        "cdf53" => WaveletType::Cdf53,
+        "haar" => WaveletType::Haar,
+        _ => WaveletType::Cdf97,
+    };
+    let config = VideoCodecConfig { wavelet_type: wt, quality, target_bpp: 0.0 };
+    let encoder = VideoEncoder::new(config);
+
+    // Cannot infer width/height from flat (N,3) — require user to pass them
+    Err(pyo3::exceptions::PyValueError::new_err(
+        "Use encode_video_frame_wh(frame_rgb_bytes, width, height, quality, wavelet) instead"
+    ))
+}
+
+/// Encode raw RGB bytes using ALICE-Codec (wavelet + rANS).
+///
+/// Args:
+///     rgb_data: Raw RGB bytes (length = width * height * 3)
+///     width: Frame width
+///     height: Frame height
+///     quality: Quality 1-100 (default: 75)
+///     wavelet: Wavelet type "cdf97", "cdf53", "haar" (default: "cdf97")
+///
+/// Returns:
+///     Compressed bytes
+#[cfg(feature = "codec")]
+#[pyfunction]
+#[pyo3(signature = (rgb_data, width, height, quality=75, wavelet="cdf97"))]
+fn encode_video_frame_wh(
+    py: Python<'_>,
+    rgb_data: &[u8],
+    width: usize,
+    height: usize,
+    quality: u8,
+    wavelet: &str,
+) -> PyResult<Py<PyBytes>> {
+    if rgb_data.len() != width * height * 3 {
+        return Err(pyo3::exceptions::PyValueError::new_err(
+            format!("RGB data length {} != width*height*3 = {}", rgb_data.len(), width * height * 3)
+        ));
+    }
+
+    let wt = match wavelet {
+        "cdf53" => WaveletType::Cdf53,
+        "haar" => WaveletType::Haar,
+        _ => WaveletType::Cdf97,
+    };
+    let config = VideoCodecConfig { wavelet_type: wt, quality, target_bpp: 0.0 };
+    let encoder = VideoEncoder::new(config);
+
+    let send_ptr = SendPtr::new(rgb_data.as_ptr(), rgb_data.len());
+    let compressed = py.allow_threads(move || {
+        let slice = unsafe { send_ptr.as_slice() };
+        encoder.encode_frame(slice, width, height)
+    });
+
+    Ok(PyBytes::new(py, &compressed).into())
+}
+
+/// Decode compressed video bytes back to RGB.
+///
+/// Args:
+///     compressed: Compressed bytes from encode_video_frame_wh
+///     wavelet: Wavelet type (must match encoder, default: "cdf97")
+///
+/// Returns:
+///     Tuple of (rgb_bytes, width, height)
+#[cfg(feature = "codec")]
+#[pyfunction]
+#[pyo3(signature = (compressed, wavelet="cdf97"))]
+fn decode_video_frame(
+    py: Python<'_>,
+    compressed: &[u8],
+    wavelet: &str,
+) -> PyResult<(Py<PyBytes>, u32, u32)> {
+    let wt = match wavelet {
+        "cdf53" => WaveletType::Cdf53,
+        "haar" => WaveletType::Haar,
+        _ => WaveletType::Cdf97,
+    };
+    let decoder = VideoDecoder::new(wt);
+
+    let send_ptr = SendPtr::new(compressed.as_ptr(), compressed.len());
+    let result = py.allow_threads(move || {
+        let slice = unsafe { send_ptr.as_slice() };
+        decoder.decode_frame(slice)
+    });
+
+    match result {
+        Some((rgb, w, h)) => Ok((PyBytes::new(py, &rgb).into(), w, h)),
+        None => Err(pyo3::exceptions::PyValueError::new_err("Failed to decode video frame")),
+    }
+}
+
+// =============================================================================
+// Media Stack: Voice Codec (feature = "voice")
+// =============================================================================
+
+#[cfg(feature = "voice")]
+use crate::media::voice_codec::{
+    VoiceEncoder, VoiceDecoder, AudioLayerType,
+    encode_voice_parametric, decode_voice_parametric,
+};
+
+/// Encode PCM audio to parametric voice parameters.
+///
+/// Args:
+///     samples: f32 PCM audio (NumPy 1D array, mono)
+///     sample_rate: Sample rate in Hz (default: 16000)
+///
+/// Returns:
+///     Encoded voice parameter bytes
+#[cfg(feature = "voice")]
+#[pyfunction]
+#[pyo3(signature = (samples, sample_rate=16000))]
+fn encode_voice(
+    py: Python<'_>,
+    samples: Vec<f32>,
+    sample_rate: u32,
+) -> PyResult<Py<PyBytes>> {
+    let result = py.allow_threads(move || {
+        encode_voice_parametric(&samples, sample_rate)
+    });
+
+    match result {
+        Ok(bytes) => Ok(PyBytes::new(py, &bytes).into()),
+        Err(e) => Err(pyo3::exceptions::PyRuntimeError::new_err(e)),
+    }
+}
+
+/// Decode parametric voice parameters to PCM audio.
+///
+/// Args:
+///     data: Encoded voice parameter bytes
+///     sample_rate: Sample rate in Hz (default: 16000)
+///
+/// Returns:
+///     f32 PCM audio as NumPy 1D array
+#[cfg(feature = "voice")]
+#[pyfunction]
+#[pyo3(signature = (data, sample_rate=16000))]
+fn decode_voice<'py>(
+    py: Python<'py>,
+    data: &[u8],
+    sample_rate: u32,
+) -> PyResult<Bound<'py, PyArray1<f32>>> {
+    let send_ptr = SendPtr::new(data.as_ptr(), data.len());
+    let result = py.allow_threads(move || {
+        let slice = unsafe { send_ptr.as_slice() };
+        decode_voice_parametric(slice, sample_rate)
+    });
+
+    match result {
+        Ok(samples) => Ok(samples.into_pyarray(py)),
+        Err(e) => Err(pyo3::exceptions::PyRuntimeError::new_err(e)),
     }
 }
 
@@ -947,6 +1144,20 @@ fn libasp(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(estimate_hybrid_savings, m)?)?;
     m.add_class::<PyHybridTransmitter>()?;
     m.add_class::<PyHybridReceiver>()?;
+
+    // Media Stack: Video Codec (feature = "codec")
+    #[cfg(feature = "codec")]
+    {
+        m.add_function(wrap_pyfunction!(encode_video_frame_wh, m)?)?;
+        m.add_function(wrap_pyfunction!(decode_video_frame, m)?)?;
+    }
+
+    // Media Stack: Voice Codec (feature = "voice")
+    #[cfg(feature = "voice")]
+    {
+        m.add_function(wrap_pyfunction!(encode_voice, m)?)?;
+        m.add_function(wrap_pyfunction!(decode_voice, m)?)?;
+    }
 
     // Utility
     m.add_function(wrap_pyfunction!(version, m)?)?;
