@@ -24,6 +24,7 @@ voice = ["dep:alice-voice"]       # ALICE-Voice (LPC parametric) integration
 media-stack = ["codec", "voice"]  # Full A/V media pipeline
 sync = ["dep:alice-sync"]         # ALICE-Sync events embedded in ASP packets
 physics = ["dep:alice-physics"]   # Physics state delta → D-packets
+crypto = ["dep:alice-crypto"]    # ALICE-Crypto AEAD encryption for ASP packets
 
 [dependencies]
 # Serialization - FlatBuffers (required, cross-language, zero-copy)
@@ -65,6 +66,7 @@ alice-codec = { path = "../ALICE-Codec", optional = true, default-features = fal
 alice-voice = { path = "../ALICE-Voice", optional = true, default-features = false, features = ["std"] }
 alice-sync = { path = "../ALICE-Sync", optional = true, default-features = false, features = ["std"] }
 alice-physics = { path = "../ALICE-Physics", optional = true, default-features = false, features = ["std"] }
+alice-crypto = { path = "../ALICE-Crypto", optional = true, default-features = false, features = ["std"] }
 
 # Error handling
 thiserror = "2.0"

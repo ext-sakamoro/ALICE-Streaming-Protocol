@@ -129,6 +129,8 @@ pub mod media;
 pub mod sync_bridge;
 #[cfg(feature = "physics")]
 pub mod physics_bridge;
+#[cfg(feature = "crypto")]
+pub mod crypto_bridge;
 
 #[cfg(feature = "python")]
 mod python;
