@@ -446,6 +446,7 @@ simd = []                         # Explicit SIMD (auto-detected)
 codec = ["alice-codec"]           # Video codec (3D wavelet + rANS)
 voice = ["alice-voice"]           # Voice codec (LPC parametric)
 media-stack = ["codec", "voice"]  # Full media stack
+crypto = ["alice-crypto"]        # AEAD encryption (DRM)
 ```
 
 ## License
@@ -469,6 +470,33 @@ libasp connects to other ALICE ecosystem crates via feature-gated bridge modules
 |--------|---------|--------------|-------------|
 | `physics_bridge` | `physics` | [ALICE-Physics](../ALICE-Physics) | Encodes physics body state deltas as ASP D-packets for streaming deterministic physics |
 | `sync_bridge` | `sync` | [ALICE-Sync](../ALICE-Sync) | Real-time sync of ASP streams via ALICE-Sync CRDT |
+| `crypto_bridge` | `crypto` | [ALICE-Crypto](../ALICE-Crypto) | XChaCha20-Poly1305 AEAD encryption for ASP packets (DRM, private channels) |
+
+### Crypto Bridge (feature: `crypto`)
+
+XChaCha20-Poly1305 authenticated encryption for ASP packets. The sequence number is preserved in cleartext for routing, while the full packet payload is encrypted and authenticated. Supports stream key derivation from channel ID + secret.
+
+```toml
+[dependencies]
+libasp = { path = "../ALICE-Streaming-Protocol", features = ["crypto"] }
+```
+
+```rust
+use libasp::crypto_bridge::{seal_packet, open_packet, derive_stream_key, packet_content_hash};
+
+// Derive per-channel encryption key
+let key = derive_stream_key("channel-42", b"shared-secret");
+
+// Encrypt packet (sequence preserved for routing)
+let sealed = seal_packet(&asp_packet, &key)?;
+assert_eq!(sealed.sequence, asp_packet.sequence());
+
+// Content hash for deduplication (no decryption needed)
+let hash = packet_content_hash(&sealed);
+
+// Decrypt
+let recovered = open_packet(&sealed, &key)?;
+```
 
 ### Recent Performance Improvements
 
