@@ -25,6 +25,7 @@ media-stack = ["codec", "voice"]  # Full A/V media pipeline
 sync = ["dep:alice-sync"]         # ALICE-Sync events embedded in ASP packets
 physics = ["dep:alice-physics"]   # Physics state delta → D-packets
 crypto = ["dep:alice-crypto"]    # ALICE-Crypto AEAD encryption for ASP packets
+all-bridges = ["sync", "physics", "crypto"]  # All integration bridges
 
 [dependencies]
 # Serialization - FlatBuffers (required, cross-language, zero-copy)
