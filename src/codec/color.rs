@@ -270,7 +270,7 @@ fn update_centroids(pixels: &[[u8; 3]], assignments: &[usize], k: usize) -> Vec<
 }
 
 /// Calculate squared color distance (Euclidean in RGB space)
-#[inline]
+#[inline(always)]
 fn color_distance_sq(pixel: &[u8; 3], color: &Color) -> f64 {
     let dr = pixel[0] as f64 - color.r as f64;
     let dg = pixel[1] as f64 - color.g as f64;

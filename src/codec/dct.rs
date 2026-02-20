@@ -59,11 +59,13 @@ impl DctTransform {
     }
 
     /// Quantize DCT coefficients
+    #[inline(always)]
     pub fn quantize(&self, coefficients: &[f64]) -> Vec<i32> {
+        let inv_quant: Vec<f64> = self.quant_matrix.iter().map(|&q| 1.0 / q).collect();
         coefficients
             .iter()
-            .zip(self.quant_matrix.iter())
-            .map(|(&c, &q)| (c / q).round() as i32)
+            .zip(inv_quant.iter())
+            .map(|(&c, &inv_q)| (c * inv_q).round() as i32)
             .collect()
     }
 

@@ -261,7 +261,7 @@ mod arm_simd {
 // =============================================================================
 
 /// Calculate SAD for a block (dispatches to best available SIMD)
-#[inline]
+#[inline(always)]
 fn calculate_sad_block(
     current: &[u8],
     previous: &[u8],
@@ -379,6 +379,7 @@ pub fn estimate_motion_fast(
 }
 
 /// Diamond search with SIMD acceleration
+#[inline(always)]
 fn diamond_search_simd(
     current: &[u8],
     previous: &[u8],

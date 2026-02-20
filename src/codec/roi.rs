@@ -267,6 +267,7 @@ pub fn detect_rois(
 }
 
 /// Calculate edge strength using simplified Sobel operator
+#[inline(always)]
 fn calculate_edge_strength(
     frame: &[u8],
     width: usize,
@@ -305,16 +306,17 @@ fn calculate_edge_strength(
         }
     }
 
-    // Normalize by block area
     let area = (block_size - 2) * (block_size - 2);
     if area > 0 {
-        total_gradient / area as u32
+        let inv_area = 1.0 / area as f32;
+        (total_gradient as f32 * inv_area) as u32
     } else {
         0
     }
 }
 
 /// Calculate contrast (max - min) within a block
+#[inline(always)]
 fn calculate_contrast(
     frame: &[u8],
     width: usize,
@@ -338,6 +340,7 @@ fn calculate_contrast(
 }
 
 /// Calculate motion magnitude between frames
+#[inline(always)]
 fn calculate_motion_magnitude(
     current: &[u8],
     previous: &[u8],
@@ -357,8 +360,8 @@ fn calculate_motion_magnitude(
         }
     }
 
-    // Normalize by block area
-    total_diff / (block_size * block_size) as u32
+    let inv_area = 1.0 / (block_size * block_size) as f32;
+    (total_diff as f32 * inv_area) as u32
 }
 
 /// Convert block map to ROI regions
