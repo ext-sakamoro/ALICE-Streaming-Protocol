@@ -28,9 +28,7 @@ pub struct SealedPacket {
 /// The sequence number is preserved in cleartext for routing purposes.
 /// The full packet payload is authenticated and encrypted.
 pub fn seal_packet(packet: &AspPacket, key: &Key) -> Result<SealedPacket, String> {
-    let bytes = packet
-        .to_bytes()
-        .map_err(|e| format!("serialize: {}", e))?;
+    let bytes = packet.to_bytes().map_err(|e| format!("serialize: {}", e))?;
     let sealed = crypto::seal(key, &bytes).map_err(|e| format!("encrypt: {:?}", e))?;
     Ok(SealedPacket {
         sequence: packet.sequence(),
@@ -61,7 +59,7 @@ pub fn derive_stream_key(channel_id: &str, secret: &[u8]) -> Key {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{IPacketPayload, Rect, Color, RegionDescriptor};
+    use crate::{Color, IPacketPayload, Rect, RegionDescriptor};
 
     fn make_test_packet() -> AspPacket {
         let mut payload = IPacketPayload::new(640, 480, 30.0);

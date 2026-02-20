@@ -19,9 +19,9 @@
 //! let bytes = packet.to_bytes_bincode()?;
 //! ```
 
+use crate::flatbuffers_api;
 use crate::header::{crc32, AspPacketHeader};
 use crate::types::*;
-use crate::flatbuffers_api;
 use serde::{Deserialize, Serialize};
 
 /// Color palette for procedural generation
@@ -35,7 +35,10 @@ pub struct ColorPalette {
 
 impl ColorPalette {
     pub fn new(colors: Vec<Color>) -> Self {
-        Self { colors, weights: None }
+        Self {
+            colors,
+            weights: None,
+        }
     }
 
     pub fn with_weights(colors: Vec<Color>, weights: Vec<f32>) -> Self {
@@ -220,7 +223,11 @@ impl DPacketPayload {
             return (0.0, 0.0);
         }
 
-        let avg_magnitude: f32 = self.motion_vectors.iter().map(|mv| mv.magnitude()).sum::<f32>()
+        let avg_magnitude: f32 = self
+            .motion_vectors
+            .iter()
+            .map(|mv| mv.magnitude())
+            .sum::<f32>()
             / self.motion_vectors.len() as f32;
 
         let max_magnitude: f32 = self
@@ -439,11 +446,7 @@ impl AspPacket {
         let estimated_size = Self::estimate_i_packet_size(&payload);
 
         Ok(Self {
-            header: AspPacketHeader::new(
-                PacketType::IPacket,
-                sequence,
-                estimated_size as u32,
-            ),
+            header: AspPacketHeader::new(PacketType::IPacket, sequence, estimated_size as u32),
             payload: AspPayload::IPacket(payload),
         })
     }
@@ -453,11 +456,7 @@ impl AspPacket {
         let estimated_size = Self::estimate_d_packet_size(&payload);
 
         Ok(Self {
-            header: AspPacketHeader::new(
-                PacketType::DPacket,
-                sequence,
-                estimated_size as u32,
-            ),
+            header: AspPacketHeader::new(PacketType::DPacket, sequence, estimated_size as u32),
             payload: AspPayload::DPacket(payload),
         })
     }
@@ -467,11 +466,7 @@ impl AspPacket {
         let estimated_size = Self::estimate_c_packet_size(&payload);
 
         Ok(Self {
-            header: AspPacketHeader::new(
-                PacketType::CPacket,
-                sequence,
-                estimated_size as u32,
-            ),
+            header: AspPacketHeader::new(PacketType::CPacket, sequence, estimated_size as u32),
             payload: AspPayload::CPacket(payload),
         })
     }
@@ -498,7 +493,11 @@ impl AspPacket {
     }
 
     fn estimate_c_packet_size(payload: &CPacketPayload) -> usize {
-        32 + payload.corrections.iter().map(|c| c.pixel_delta.len() + 32).sum::<usize>()
+        32 + payload
+            .corrections
+            .iter()
+            .map(|c| c.pixel_delta.len() + 32)
+            .sum::<usize>()
     }
 
     /// Serialize packet to bytes using FlatBuffers (cross-language compatible)
@@ -573,8 +572,12 @@ impl AspPacket {
 
         // Verify checksum
         let checksum_offset = data.len() - 4;
-        let expected_checksum =
-            u32::from_be_bytes([data[checksum_offset], data[checksum_offset + 1], data[checksum_offset + 2], data[checksum_offset + 3]]);
+        let expected_checksum = u32::from_be_bytes([
+            data[checksum_offset],
+            data[checksum_offset + 1],
+            data[checksum_offset + 2],
+            data[checksum_offset + 3],
+        ]);
         let actual_checksum = crc32(&data[..checksum_offset]);
 
         if expected_checksum != actual_checksum {
@@ -833,11 +836,7 @@ impl PacketEncoder {
             // Calculate CRC32 and write
             let crc = crc32(&self.buffer[..total_size - 4]);
             let crc_bytes = crc.to_be_bytes();
-            std::ptr::copy_nonoverlapping(
-                crc_bytes.as_ptr(),
-                ptr.add(total_size - 4),
-                4,
-            );
+            std::ptr::copy_nonoverlapping(crc_bytes.as_ptr(), ptr.add(total_size - 4), 4);
         }
 
         &self.buffer
@@ -889,11 +888,7 @@ impl PacketEncoder {
             // Calculate CRC32 and write
             let crc = crc32(&self.buffer[..total_size - 4]);
             let crc_bytes = crc.to_be_bytes();
-            std::ptr::copy_nonoverlapping(
-                crc_bytes.as_ptr(),
-                ptr.add(total_size - 4),
-                4,
-            );
+            std::ptr::copy_nonoverlapping(crc_bytes.as_ptr(), ptr.add(total_size - 4), 4);
         }
 
         &self.buffer
@@ -908,11 +903,8 @@ impl PacketEncoder {
         timestamp_ms: u64,
     ) -> &[u8] {
         // Get FlatBuffers payload using builder reuse
-        let fb_payload = flatbuffers_api::encode_s_packet_with_builder(
-            &mut self.builder,
-            command,
-            timestamp_ms,
-        );
+        let fb_payload =
+            flatbuffers_api::encode_s_packet_with_builder(&mut self.builder, command, timestamp_ms);
         let payload_len = fb_payload.len();
 
         // Prepare output buffer
@@ -939,11 +931,7 @@ impl PacketEncoder {
             // Calculate CRC32 and write
             let crc = crc32(&self.buffer[..total_size - 4]);
             let crc_bytes = crc.to_be_bytes();
-            std::ptr::copy_nonoverlapping(
-                crc_bytes.as_ptr(),
-                ptr.add(total_size - 4),
-                4,
-            );
+            std::ptr::copy_nonoverlapping(crc_bytes.as_ptr(), ptr.add(total_size - 4), 4);
         }
 
         &self.buffer
@@ -1033,8 +1021,12 @@ impl AspPacket {
         }
 
         let checksum_offset = data.len() - 4;
-        let expected_checksum =
-            u32::from_be_bytes([data[checksum_offset], data[checksum_offset + 1], data[checksum_offset + 2], data[checksum_offset + 3]]);
+        let expected_checksum = u32::from_be_bytes([
+            data[checksum_offset],
+            data[checksum_offset + 1],
+            data[checksum_offset + 2],
+            data[checksum_offset + 3],
+        ]);
         let actual_checksum = crc32(&data[..checksum_offset]);
 
         if expected_checksum != actual_checksum {
@@ -1189,7 +1181,12 @@ mod tests {
 
         assert!(estimated > 0);
         // Estimated should be reasonable (allow some variance due to FlatBuffers overhead)
-        assert!(estimated >= actual / 4, "Estimate {} too small for actual {}", estimated, actual);
+        assert!(
+            estimated >= actual / 4,
+            "Estimate {} too small for actual {}",
+            estimated,
+            actual
+        );
     }
 
     #[test]
@@ -1234,7 +1231,9 @@ mod tests {
 
         let bytes = encoder.encode_i_packet(
             1,
-            1920, 1080, 30.0,
+            1920,
+            1080,
+            30.0,
             flatbuffers_api::FbQualityLevel::High,
             12345,
         );
@@ -1252,11 +1251,7 @@ mod tests {
     fn test_packet_encoder_s_packet() {
         let mut encoder = PacketEncoder::new();
 
-        let bytes = encoder.encode_s_packet(
-            1,
-            flatbuffers_api::FbSyncCommand::Ping,
-            99999,
-        );
+        let bytes = encoder.encode_s_packet(1, flatbuffers_api::FbSyncCommand::Ping, 99999);
 
         let packet = AspPacket::from_bytes(bytes).unwrap();
         assert_eq!(packet.sequence(), 1);

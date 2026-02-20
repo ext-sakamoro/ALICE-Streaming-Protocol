@@ -143,8 +143,14 @@ impl RoiDetector {
             .into_par_iter()
             .flat_map(|by| {
                 (0..blocks_x).into_par_iter().filter_map(move |bx| {
-                    let edge_strength =
-                        calculate_edge_strength(frame, width, height, bx * block_size, by * block_size, block_size);
+                    let edge_strength = calculate_edge_strength(
+                        frame,
+                        width,
+                        height,
+                        bx * block_size,
+                        by * block_size,
+                        block_size,
+                    );
                     if edge_strength > self.config.edge_threshold {
                         Some((bx, by, edge_strength))
                     } else {
@@ -155,7 +161,12 @@ impl RoiDetector {
             .collect();
 
         // Convert to ROI regions
-        blocks_to_regions(edge_map, block_size, RoiType::Edge, self.config.min_region_size)
+        blocks_to_regions(
+            edge_map,
+            block_size,
+            RoiType::Edge,
+            self.config.min_region_size,
+        )
     }
 
     /// Detect high contrast regions
@@ -168,8 +179,13 @@ impl RoiDetector {
             .into_par_iter()
             .flat_map(|by| {
                 (0..blocks_x).into_par_iter().filter_map(move |bx| {
-                    let contrast =
-                        calculate_contrast(frame, width, bx * block_size, by * block_size, block_size);
+                    let contrast = calculate_contrast(
+                        frame,
+                        width,
+                        bx * block_size,
+                        by * block_size,
+                        block_size,
+                    );
                     if contrast > self.config.contrast_threshold {
                         Some((bx, by, contrast))
                     } else {
@@ -179,7 +195,12 @@ impl RoiDetector {
             })
             .collect();
 
-        blocks_to_regions(contrast_map, block_size, RoiType::Text, self.config.min_region_size)
+        blocks_to_regions(
+            contrast_map,
+            block_size,
+            RoiType::Text,
+            self.config.min_region_size,
+        )
     }
 
     /// Detect motion regions
@@ -219,7 +240,12 @@ impl RoiDetector {
             })
             .collect();
 
-        blocks_to_regions(motion_map, block_size, RoiType::Motion, self.config.min_region_size)
+        blocks_to_regions(
+            motion_map,
+            block_size,
+            RoiType::Motion,
+            self.config.min_region_size,
+        )
     }
 }
 
@@ -465,8 +491,8 @@ mod tests {
         let config = RoiConfig {
             detect_edges: true,
             detect_motion: false,
-            detect_contrast: true,  // Also detect contrast
-            edge_threshold: 5,      // Very low threshold
+            detect_contrast: true, // Also detect contrast
+            edge_threshold: 5,     // Very low threshold
             contrast_threshold: 50,
             block_size,
             ..Default::default()

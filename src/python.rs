@@ -7,11 +7,11 @@
 //! - Direct NumPy → FlatBufferBuilder write (no intermediate Vec)
 //! - Raw pointer iteration (no iterator overhead)
 
+use crate::packet::PacketEncoder;
+use numpy::{IntoPyArray, PyArray1, PyArray2, PyArrayMethods, PyReadonlyArray2};
 use pyo3::prelude::*;
 use pyo3::types::PyBytes;
-use numpy::{PyArray1, PyArray2, PyReadonlyArray2, IntoPyArray, PyArrayMethods};
 use std::cell::RefCell;
-use crate::packet::PacketEncoder;
 
 /// Wrapper for raw pointer that implements Send
 /// SAFETY: Only use for read-only access to memory that outlives the operation
@@ -32,14 +32,14 @@ impl SendPtr {
 
 use crate::codec::{
     color::{extract_dominant_colors, kmeans_palette},
-    dct::{dct2d, idct2d, sparse_dct_encode, sparse_dct_decode, DctTransform},
+    dct::{dct2d, idct2d, sparse_dct_decode, sparse_dct_encode, DctTransform},
     motion::{estimate_motion_fast, MotionEstimator, SearchAlgorithm},
     roi::{detect_rois, RoiConfig},
 };
-use crate::packet::{AspPacket, IPacketPayload, DPacketPayload};
-use crate::types::{MotionVector, PacketType, RoiType};
 use crate::generated;
-use crate::header::{AspPacketHeader, crc32};
+use crate::header::{crc32, AspPacketHeader};
+use crate::packet::{AspPacket, DPacketPayload, IPacketPayload};
+use crate::types::{MotionVector, PacketType, RoiType};
 
 // =============================================================================
 // Thread Local Encoder (Zero Allocation Per Call)
@@ -107,15 +107,16 @@ fn estimate_motion_numpy<'py>(
         let empty: Vec<i32> = vec![];
         return numpy::PyArray::from_vec(py, empty)
             .reshape([0, 5])
-            .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(
-                format!("Failed to reshape array: {:?}", e)
-            ));
+            .map_err(|e| {
+                pyo3::exceptions::PyRuntimeError::new_err(format!(
+                    "Failed to reshape array: {:?}",
+                    e
+                ))
+            });
     }
 
     // Allocate NumPy array directly in Python heap (zero-copy output)
-    let array = unsafe {
-        PyArray2::<i32>::new(py, [n_results, 5], false)
-    };
+    let array = unsafe { PyArray2::<i32>::new(py, [n_results, 5], false) };
 
     // Write directly to Python memory
     unsafe {
@@ -145,10 +146,17 @@ fn estimate_motion(
     search_range: usize,
 ) -> PyResult<Vec<(u32, u32, i16, i16, u32)>> {
     let mvs = estimate_motion_fast(
-        current, previous, width, height, block_size, search_range, 256
+        current,
+        previous,
+        width,
+        height,
+        block_size,
+        search_range,
+        256,
     );
 
-    Ok(mvs.into_iter()
+    Ok(mvs
+        .into_iter()
         .map(|mv| (mv.block_x as u32, mv.block_y as u32, mv.dx, mv.dy, mv.sad))
         .collect())
 }
@@ -184,12 +192,25 @@ impl PyMotionEstimator {
         current: PyReadonlyArray2<'py, u8>,
         previous: PyReadonlyArray2<'py, u8>,
     ) -> PyResult<Bound<'py, PyArray2<i32>>> {
-        estimate_motion_numpy(py, current, previous, self.inner.block_size, self.inner.search_range)
+        estimate_motion_numpy(
+            py,
+            current,
+            previous,
+            self.inner.block_size,
+            self.inner.search_range,
+        )
     }
 
     /// Legacy estimate (returns list)
-    fn estimate(&self, current: &[u8], previous: &[u8], width: usize, height: usize) -> Vec<(u32, u32, i16, i16, u32)> {
-        self.inner.estimate(current, previous, width, height)
+    fn estimate(
+        &self,
+        current: &[u8],
+        previous: &[u8],
+        width: usize,
+        height: usize,
+    ) -> Vec<(u32, u32, i16, i16, u32)> {
+        self.inner
+            .estimate(current, previous, width, height)
             .into_iter()
             .map(|mv| (mv.block_x as u32, mv.block_y as u32, mv.dx, mv.dy, mv.sad))
             .collect()
@@ -225,14 +246,15 @@ fn extract_colors<'py>(
         let empty: Vec<u8> = vec![];
         return numpy::PyArray::from_vec(py, empty)
             .reshape([0, 3])
-            .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(
-                format!("Failed to reshape array: {:?}", e)
-            ));
+            .map_err(|e| {
+                pyo3::exceptions::PyRuntimeError::new_err(format!(
+                    "Failed to reshape array: {:?}",
+                    e
+                ))
+            });
     }
 
-    let array = unsafe {
-        PyArray2::<u8>::new(py, [n, 3], false)
-    };
+    let array = unsafe { PyArray2::<u8>::new(py, [n, 3], false) };
 
     // Write directly to Python memory
     unsafe {
@@ -270,9 +292,7 @@ fn extract_colors_with_weights<'py>(
     let n = colors.len();
 
     // Allocate colors array directly in Python heap
-    let colors_array = unsafe {
-        PyArray2::<u8>::new(py, [n, 3], false)
-    };
+    let colors_array = unsafe { PyArray2::<u8>::new(py, [n, 3], false) };
 
     // Write colors directly to Python memory
     unsafe {
@@ -296,22 +316,14 @@ fn extract_colors_with_weights<'py>(
 
 /// Perform 2D DCT (NumPy optimized)
 #[pyfunction]
-fn dct_2d<'py>(
-    py: Python<'py>,
-    input: Vec<f64>,
-    size: usize
-) -> Bound<'py, PyArray1<f64>> {
+fn dct_2d<'py>(py: Python<'py>, input: Vec<f64>, size: usize) -> Bound<'py, PyArray1<f64>> {
     let result = dct2d(&input, size);
     result.into_pyarray(py)
 }
 
 /// Perform inverse 2D DCT (NumPy optimized)
 #[pyfunction]
-fn idct_2d<'py>(
-    py: Python<'py>,
-    input: Vec<f64>,
-    size: usize
-) -> Bound<'py, PyArray1<f64>> {
+fn idct_2d<'py>(py: Python<'py>, input: Vec<f64>, size: usize) -> Bound<'py, PyArray1<f64>> {
     let result = idct2d(&input, size);
     result.into_pyarray(py)
 }
@@ -330,7 +342,7 @@ fn decode_sparse_dct<'py>(
     py: Python<'py>,
     sparse: Vec<(u32, u32, f32)>,
     size: usize,
-    default: i32
+    default: i32,
 ) -> Bound<'py, PyArray1<i32>> {
     let result = sparse_dct_decode(&sparse, size, default);
     result.into_pyarray(py)
@@ -373,7 +385,11 @@ impl PyDctTransform {
         self.inner.encode_sparse(&block)
     }
 
-    fn decode_sparse<'py>(&self, py: Python<'py>, sparse: Vec<(u32, u32, f32)>) -> Bound<'py, PyArray1<f64>> {
+    fn decode_sparse<'py>(
+        &self,
+        py: Python<'py>,
+        sparse: Vec<(u32, u32, f32)>,
+    ) -> Bound<'py, PyArray1<f64>> {
         self.inner.decode_sparse(&sparse, 0.0).into_pyarray(py)
     }
 }
@@ -418,15 +434,16 @@ fn detect_roi<'py>(
         let empty: Vec<f32> = vec![];
         return numpy::PyArray::from_vec(py, empty)
             .reshape([0, 6])
-            .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(
-                format!("Failed to reshape array: {:?}", e)
-            ));
+            .map_err(|e| {
+                pyo3::exceptions::PyRuntimeError::new_err(format!(
+                    "Failed to reshape array: {:?}",
+                    e
+                ))
+            });
     }
 
     // Allocate NumPy array directly in Python heap (zero-copy output)
-    let array = unsafe {
-        PyArray2::<f32>::new(py, [n, 6], false)
-    };
+    let array = unsafe { PyArray2::<f32>::new(py, [n, 6], false) };
 
     // Write directly to Python memory
     unsafe {
@@ -461,11 +478,18 @@ fn detect_roi<'py>(
 /// Create an I-Packet (keyframe)
 #[pyfunction]
 #[pyo3(signature = (sequence, width, height, fps=30.0))]
-fn create_i_packet(py: Python<'_>, sequence: u32, width: u32, height: u32, fps: f32) -> PyResult<Py<PyBytes>> {
+fn create_i_packet(
+    py: Python<'_>,
+    sequence: u32,
+    width: u32,
+    height: u32,
+    fps: f32,
+) -> PyResult<Py<PyBytes>> {
     let payload = IPacketPayload::new(width, height, fps);
     let packet = AspPacket::create_i_packet(sequence, payload)
         .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))?;
-    let bytes = packet.to_bytes()
+    let bytes = packet
+        .to_bytes()
         .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))?;
     Ok(PyBytes::new(py, &bytes).into())
 }
@@ -493,7 +517,7 @@ fn create_d_packet_numpy(
     // Validation
     if n_cols < 5 {
         return Err(pyo3::exceptions::PyValueError::new_err(
-            "Motion vectors array must have at least 5 columns"
+            "Motion vectors array must have at least 5 columns",
         ));
     }
 
@@ -511,7 +535,9 @@ fn create_d_packet_numpy(
 
         // Serialize Motion Vectors directly from NumPy ptr
         // FlatBuffers builds vectors backwards
-        encoder.builder.start_vector::<generated::MotionVector>(n_rows);
+        encoder
+            .builder
+            .start_vector::<generated::MotionVector>(n_rows);
 
         unsafe {
             for i in (0..n_rows).rev() {
@@ -527,7 +553,9 @@ fn create_d_packet_numpy(
                 encoder.builder.push(fb_mv);
             }
         }
-        let mvs_offset = encoder.builder.end_vector::<generated::MotionVector>(n_rows);
+        let mvs_offset = encoder
+            .builder
+            .end_vector::<generated::MotionVector>(n_rows);
 
         // 2. Build DPacketPayload
         let d_packet = generated::DPacketPayload::create(
@@ -573,29 +601,17 @@ fn create_d_packet_numpy(
             let out_ptr = encoder.buffer.as_mut_ptr();
 
             // Write Header (zero bounds check)
-            let header = AspPacketHeader::new(
-                PacketType::DPacket,
-                sequence,
-                payload_len as u32,
-            );
+            let header = AspPacketHeader::new(PacketType::DPacket, sequence, payload_len as u32);
             header.write_to_ptr(out_ptr);
 
             // Copy FlatBuffers payload
             // SAFETY: fb_ptr is still valid because encoder.builder hasn't been modified
-            std::ptr::copy_nonoverlapping(
-                fb_ptr,
-                out_ptr.add(AspPacketHeader::SIZE),
-                payload_len,
-            );
+            std::ptr::copy_nonoverlapping(fb_ptr, out_ptr.add(AspPacketHeader::SIZE), payload_len);
 
             // CRC32
             let crc = crc32(&encoder.buffer[..total_size - 4]);
             let crc_bytes = crc.to_be_bytes();
-            std::ptr::copy_nonoverlapping(
-                crc_bytes.as_ptr(),
-                out_ptr.add(total_size - 4),
-                4,
-            );
+            std::ptr::copy_nonoverlapping(crc_bytes.as_ptr(), out_ptr.add(total_size - 4), 4);
         }
 
         // Return as Python bytes (this is the only unavoidable copy - Python owns its memory)
@@ -620,7 +636,8 @@ fn create_d_packet(
 
     let packet = AspPacket::create_d_packet(sequence, payload)
         .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))?;
-    let bytes = packet.to_bytes()
+    let bytes = packet
+        .to_bytes()
         .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))?;
     Ok(PyBytes::new(py, &bytes).into())
 }
@@ -638,7 +655,11 @@ fn parse_packet(data: &[u8]) -> PyResult<(String, u32, u32)> {
         PacketType::SPacket => "S",
     };
 
-    Ok((type_str.to_string(), packet.sequence(), packet.payload_size()))
+    Ok((
+        type_str.to_string(),
+        packet.sequence(),
+        packet.payload_size(),
+    ))
 }
 
 /// Get library version
@@ -651,13 +672,11 @@ fn version() -> &'static str {
 // Hybrid Streaming (SDF Background + Wavelet Person)
 // =============================================================================
 
-use crate::scene::{
-    SdfSceneDescriptor, PersonMask, HybridBandwidthStats,
-    rle_encode_mask, rle_decode_mask,
-};
 use crate::hybrid::{
-    HybridTransmitter, HybridReceiver, HybridFrame,
-    create_person_mask, estimate_savings,
+    create_person_mask, estimate_savings, HybridFrame, HybridReceiver, HybridTransmitter,
+};
+use crate::scene::{
+    rle_decode_mask, rle_encode_mask, HybridBandwidthStats, PersonMask, SdfSceneDescriptor,
 };
 
 /// RLE encode a binary mask (NumPy zero-copy input).
@@ -670,15 +689,11 @@ use crate::hybrid::{
 /// Returns:
 ///     RLE-encoded bytes
 #[pyfunction]
-fn rle_encode_mask_numpy(
-    mask: PyReadonlyArray2<u8>,
-    width: u32,
-    height: u32,
-) -> PyResult<Vec<u8>> {
+fn rle_encode_mask_numpy(mask: PyReadonlyArray2<u8>, width: u32, height: u32) -> PyResult<Vec<u8>> {
     let arr = mask.as_array();
-    let slice = arr.as_slice().ok_or_else(|| {
-        pyo3::exceptions::PyValueError::new_err("Mask must be C-contiguous")
-    })?;
+    let slice = arr
+        .as_slice()
+        .ok_or_else(|| pyo3::exceptions::PyValueError::new_err("Mask must be C-contiguous"))?;
     Ok(rle_encode_mask(slice, width, height))
 }
 
@@ -701,7 +716,9 @@ fn rle_decode_mask_numpy<'py>(
     let decoded = rle_decode_mask(rle, width, height);
     let h = height as usize;
     let w = width as usize;
-    decoded.into_pyarray(py).reshape([h, w])
+    decoded
+        .into_pyarray(py)
+        .reshape([h, w])
         .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(format!("{:?}", e)))
 }
 
@@ -725,7 +742,13 @@ fn estimate_hybrid_savings(
     sdf_scene_bytes: usize,
     wavelet_bpp: f32,
 ) -> (f64, f64) {
-    estimate_savings(frame_width, frame_height, person_coverage, sdf_scene_bytes, wavelet_bpp)
+    estimate_savings(
+        frame_width,
+        frame_height,
+        person_coverage,
+        sdf_scene_bytes,
+        wavelet_bpp,
+    )
 }
 
 /// Hybrid transmitter for SDF + person streaming.
@@ -739,7 +762,9 @@ struct PyHybridTransmitter {
 impl PyHybridTransmitter {
     #[new]
     fn new() -> Self {
-        Self { inner: HybridTransmitter::new() }
+        Self {
+            inner: HybridTransmitter::new(),
+        }
     }
 
     /// Create a keyframe with SDF scene + person data.
@@ -777,8 +802,14 @@ impl PyHybridTransmitter {
             }
             _ => None,
         };
-        let frame = self.inner.create_keyframe(width, height, fps, scene, mask, person_video);
-        Ok((frame.sequence, frame.is_keyframe, frame.person_video_data.len()))
+        let frame = self
+            .inner
+            .create_keyframe(width, height, fps, scene, mask, person_video);
+        Ok((
+            frame.sequence,
+            frame.is_keyframe,
+            frame.person_video_data.len(),
+        ))
     }
 
     /// Create a delta frame with optional SDF delta + person update.
@@ -802,8 +833,14 @@ impl PyHybridTransmitter {
             }
             _ => None,
         };
-        let frame = self.inner.create_delta_frame(None, mask, person_video, timestamp_ms);
-        Ok((frame.sequence, frame.is_keyframe, frame.person_video_data.len()))
+        let frame = self
+            .inner
+            .create_delta_frame(None, mask, person_video, timestamp_ms);
+        Ok((
+            frame.sequence,
+            frame.is_keyframe,
+            frame.person_video_data.len(),
+        ))
     }
 
     /// Get bandwidth statistics report.
@@ -838,7 +875,9 @@ struct PyHybridReceiver {
 impl PyHybridReceiver {
     #[new]
     fn new() -> Self {
-        Self { inner: HybridReceiver::new() }
+        Self {
+            inner: HybridReceiver::new(),
+        }
     }
 
     /// Process a keyframe. Returns (render_sdf, scene_version, person_bbox, person_video_size).
@@ -857,8 +896,9 @@ impl PyHybridReceiver {
             width,
             height,
             sdf_scene: if has_scene {
-                Some(SdfSceneDescriptor::new(vec![b'A', b'S', b'D', b'F',
-                    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]))
+                Some(SdfSceneDescriptor::new(vec![
+                    b'A', b'S', b'D', b'F', 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+                ]))
             } else {
                 None
             },
@@ -916,7 +956,7 @@ impl PyHybridReceiver {
 // =============================================================================
 
 #[cfg(feature = "codec")]
-use crate::media::video_codec::{VideoEncoder, VideoDecoder, VideoCodecConfig, WaveletType};
+use crate::media::video_codec::{VideoCodecConfig, VideoDecoder, VideoEncoder, WaveletType};
 
 /// Encode an RGB frame using ALICE-Codec (wavelet + rANS).
 ///
@@ -941,24 +981,28 @@ fn encode_video_frame(
     // Expect (H*W, 3) or flat (H*W*3,) — we accept (N, 3)
     if shape.len() != 2 || shape[1] != 3 {
         return Err(pyo3::exceptions::PyValueError::new_err(
-            "Frame must be (H*W, 3) uint8 array. Reshape your (H, W, 3) frame to (-1, 3) first."
+            "Frame must be (H*W, 3) uint8 array. Reshape your (H, W, 3) frame to (-1, 3) first.",
         ));
     }
-    let slice = arr.as_slice().ok_or_else(|| {
-        pyo3::exceptions::PyValueError::new_err("Frame must be C-contiguous")
-    })?;
+    let slice = arr
+        .as_slice()
+        .ok_or_else(|| pyo3::exceptions::PyValueError::new_err("Frame must be C-contiguous"))?;
 
     let wt = match wavelet {
         "cdf53" => WaveletType::Cdf53,
         "haar" => WaveletType::Haar,
         _ => WaveletType::Cdf97,
     };
-    let config = VideoCodecConfig { wavelet_type: wt, quality, target_bpp: 0.0 };
+    let config = VideoCodecConfig {
+        wavelet_type: wt,
+        quality,
+        target_bpp: 0.0,
+    };
     let encoder = VideoEncoder::new(config);
 
     // Cannot infer width/height from flat (N,3) — require user to pass them
     Err(pyo3::exceptions::PyValueError::new_err(
-        "Use encode_video_frame_wh(frame_rgb_bytes, width, height, quality, wavelet) instead"
+        "Use encode_video_frame_wh(frame_rgb_bytes, width, height, quality, wavelet) instead",
     ))
 }
 
@@ -985,9 +1029,11 @@ fn encode_video_frame_wh(
     wavelet: &str,
 ) -> PyResult<Py<PyBytes>> {
     if rgb_data.len() != width * height * 3 {
-        return Err(pyo3::exceptions::PyValueError::new_err(
-            format!("RGB data length {} != width*height*3 = {}", rgb_data.len(), width * height * 3)
-        ));
+        return Err(pyo3::exceptions::PyValueError::new_err(format!(
+            "RGB data length {} != width*height*3 = {}",
+            rgb_data.len(),
+            width * height * 3
+        )));
     }
 
     let wt = match wavelet {
@@ -995,7 +1041,11 @@ fn encode_video_frame_wh(
         "haar" => WaveletType::Haar,
         _ => WaveletType::Cdf97,
     };
-    let config = VideoCodecConfig { wavelet_type: wt, quality, target_bpp: 0.0 };
+    let config = VideoCodecConfig {
+        wavelet_type: wt,
+        quality,
+        target_bpp: 0.0,
+    };
     let encoder = VideoEncoder::new(config);
 
     let send_ptr = SendPtr::new(rgb_data.as_ptr(), rgb_data.len());
@@ -1038,7 +1088,9 @@ fn decode_video_frame(
 
     match result {
         Some((rgb, w, h)) => Ok((PyBytes::new(py, &rgb).into(), w, h)),
-        None => Err(pyo3::exceptions::PyValueError::new_err("Failed to decode video frame")),
+        None => Err(pyo3::exceptions::PyValueError::new_err(
+            "Failed to decode video frame",
+        )),
     }
 }
 
@@ -1048,8 +1100,7 @@ fn decode_video_frame(
 
 #[cfg(feature = "voice")]
 use crate::media::voice_codec::{
-    VoiceEncoder, VoiceDecoder, AudioLayerType,
-    encode_voice_parametric, decode_voice_parametric,
+    decode_voice_parametric, encode_voice_parametric, AudioLayerType, VoiceDecoder, VoiceEncoder,
 };
 
 /// Encode PCM audio to parametric voice parameters.
@@ -1063,14 +1114,8 @@ use crate::media::voice_codec::{
 #[cfg(feature = "voice")]
 #[pyfunction]
 #[pyo3(signature = (samples, sample_rate=16000))]
-fn encode_voice(
-    py: Python<'_>,
-    samples: Vec<f32>,
-    sample_rate: u32,
-) -> PyResult<Py<PyBytes>> {
-    let result = py.allow_threads(move || {
-        encode_voice_parametric(&samples, sample_rate)
-    });
+fn encode_voice(py: Python<'_>, samples: Vec<f32>, sample_rate: u32) -> PyResult<Py<PyBytes>> {
+    let result = py.allow_threads(move || encode_voice_parametric(&samples, sample_rate));
 
     match result {
         Ok(bytes) => Ok(PyBytes::new(py, &bytes).into()),

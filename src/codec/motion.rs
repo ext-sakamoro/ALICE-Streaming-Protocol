@@ -61,7 +61,13 @@ impl MotionEstimator {
     }
 
     /// Estimate motion vectors for entire frame (parallel + SIMD)
-    pub fn estimate(&self, current: &[u8], previous: &[u8], width: usize, height: usize) -> Vec<MotionVector> {
+    pub fn estimate(
+        &self,
+        current: &[u8],
+        previous: &[u8],
+        width: usize,
+        height: usize,
+    ) -> Vec<MotionVector> {
         estimate_motion_fast(
             current,
             previous,
@@ -80,12 +86,7 @@ impl MotionEstimator {
 
 /// Calculate SAD for 16x16 block - Scalar fallback
 #[inline(always)]
-fn sad_16x16_scalar(
-    src: &[u8],
-    src_stride: usize,
-    ref_block: &[u8],
-    ref_stride: usize,
-) -> u32 {
+fn sad_16x16_scalar(src: &[u8], src_stride: usize, ref_block: &[u8], ref_stride: usize) -> u32 {
     let mut sad: u32 = 0;
     for row in 0..16 {
         let src_row = &src[row * src_stride..row * src_stride + 16];
@@ -114,12 +115,7 @@ fn sad_16x16_scalar(
 
 /// Calculate SAD for 8x8 block - Scalar fallback
 #[inline(always)]
-fn sad_8x8_scalar(
-    src: &[u8],
-    src_stride: usize,
-    ref_block: &[u8],
-    ref_stride: usize,
-) -> u32 {
+fn sad_8x8_scalar(src: &[u8], src_stride: usize, ref_block: &[u8], ref_stride: usize) -> u32 {
     let mut sad: u32 = 0;
     for row in 0..8 {
         let src_row = &src[row * src_stride..row * src_stride + 8];
@@ -208,16 +204,16 @@ mod arm_simd {
             let diff_high = vabd_u8(s_high, r_high);
 
             // Widen and accumulate
-            let sum_low = vpaddl_u8(diff_low);   // u8 -> u16 pairwise add
+            let sum_low = vpaddl_u8(diff_low); // u8 -> u16 pairwise add
             let sum_high = vpaddl_u8(diff_high);
 
-            let sum_low_32 = vpaddl_u16(sum_low);  // u16 -> u32 pairwise add
+            let sum_low_32 = vpaddl_u16(sum_low); // u16 -> u32 pairwise add
             let sum_high_32 = vpaddl_u16(sum_high);
 
             // Combine into 128-bit accumulator
             let combined = vcombine_u32(
                 vreinterpret_u32_u64(vpaddl_u32(sum_low_32)),
-                vreinterpret_u32_u64(vpaddl_u32(sum_high_32))
+                vreinterpret_u32_u64(vpaddl_u32(sum_high_32)),
             );
             acc = vaddq_u32(acc, combined);
 
@@ -280,8 +276,9 @@ fn calculate_sad_block(
     let ref_offset = ref_y * width + ref_x;
 
     // Bounds check
-    if curr_offset + (block_size - 1) * width + block_size > current.len() ||
-       ref_offset + (block_size - 1) * width + block_size > previous.len() {
+    if curr_offset + (block_size - 1) * width + block_size > current.len()
+        || ref_offset + (block_size - 1) * width + block_size > previous.len()
+    {
         return u32::MAX;
     }
 
@@ -293,22 +290,12 @@ fn calculate_sad_block(
         16 => {
             #[cfg(target_arch = "aarch64")]
             unsafe {
-                return arm_simd::sad_16x16_neon(
-                    src.as_ptr(),
-                    width,
-                    ref_block.as_ptr(),
-                    width,
-                );
+                return arm_simd::sad_16x16_neon(src.as_ptr(), width, ref_block.as_ptr(), width);
             }
 
             #[cfg(all(target_arch = "x86_64", target_feature = "avx2"))]
             unsafe {
-                return x86_simd::sad_16x16_avx2(
-                    src.as_ptr(),
-                    width,
-                    ref_block.as_ptr(),
-                    width,
-                );
+                return x86_simd::sad_16x16_avx2(src.as_ptr(), width, ref_block.as_ptr(), width);
             }
 
             #[allow(unreachable_code)]
@@ -317,12 +304,7 @@ fn calculate_sad_block(
         8 => {
             #[cfg(target_arch = "aarch64")]
             unsafe {
-                return arm_simd::sad_8x8_neon(
-                    src.as_ptr(),
-                    width,
-                    ref_block.as_ptr(),
-                    width,
-                );
+                return arm_simd::sad_8x8_neon(src.as_ptr(), width, ref_block.as_ptr(), width);
             }
 
             #[allow(unreachable_code)]
@@ -411,10 +393,7 @@ fn diamond_search_simd(
     let mut best_x = 0i32;
     let mut best_y = 0i32;
     let mut best_sad = calculate_sad_block(
-        current, previous, width,
-        block_x, block_y,
-        block_x, block_y,
-        block_size,
+        current, previous, width, block_x, block_y, block_x, block_y, block_size,
     );
 
     // Early termination for static blocks
@@ -422,14 +401,25 @@ fn diamond_search_simd(
         return MotionVector::new(
             (block_x / block_size) as u16,
             (block_y / block_size) as u16,
-            0, 0, best_sad,
+            0,
+            0,
+            best_sad,
         );
     }
 
     let search_range_i = search_range as i32;
 
     // Large Diamond Search Pattern (LDSP)
-    let ldsp = [(0, -2), (-1, -1), (1, -1), (-2, 0), (2, 0), (-1, 1), (1, 1), (0, 2)];
+    let ldsp = [
+        (0, -2),
+        (-1, -1),
+        (1, -1),
+        (-2, 0),
+        (2, 0),
+        (-1, 1),
+        (1, 1),
+        (0, 2),
+    ];
 
     // Small Diamond Search Pattern (SDSP)
     let sdsp = [(0, -1), (-1, 0), (1, 0), (0, 1)];
@@ -466,10 +456,7 @@ fn diamond_search_simd(
             }
 
             let sad = calculate_sad_block(
-                current, previous, width,
-                block_x, block_y,
-                ref_x, ref_y,
-                block_size,
+                current, previous, width, block_x, block_y, ref_x, ref_y, block_size,
             );
 
             if sad < best_sad {
@@ -524,10 +511,7 @@ fn diamond_search_simd(
             }
 
             let sad = calculate_sad_block(
-                current, previous, width,
-                block_x, block_y,
-                ref_x, ref_y,
-                block_size,
+                current, previous, width, block_x, block_y, ref_x, ref_y, block_size,
             );
 
             if sad < best_sad {
@@ -565,7 +549,15 @@ pub fn estimate_motion(
     block_size: usize,
     search_range: usize,
 ) -> Vec<MotionVector> {
-    estimate_motion_fast(current, previous, width, height, block_size, search_range, 256)
+    estimate_motion_fast(
+        current,
+        previous,
+        width,
+        height,
+        block_size,
+        search_range,
+        256,
+    )
 }
 
 /// Estimate motion vectors (parallel)
@@ -579,7 +571,15 @@ pub fn estimate_motion_parallel(
     _algorithm: SearchAlgorithm,
     early_threshold: u32,
 ) -> Vec<MotionVector> {
-    estimate_motion_fast(current, previous, width, height, block_size, search_range, early_threshold)
+    estimate_motion_fast(
+        current,
+        previous,
+        width,
+        height,
+        block_size,
+        search_range,
+        early_threshold,
+    )
 }
 
 #[cfg(test)]
@@ -655,8 +655,7 @@ mod tests {
 
     #[test]
     fn test_motion_estimator_config() {
-        let estimator = MotionEstimator::new(8, 16)
-            .with_algorithm(SearchAlgorithm::HexagonSearch);
+        let estimator = MotionEstimator::new(8, 16).with_algorithm(SearchAlgorithm::HexagonSearch);
 
         assert_eq!(estimator.block_size, 8);
         assert_eq!(estimator.search_range, 16);

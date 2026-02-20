@@ -31,6 +31,8 @@ pub struct SdfSceneDescriptor {
     pub scene_version: u32,
     /// Optional scene name/identifier
     pub scene_name: Option<String>,
+    /// Optional classification labels from edge ML (label_id → label_name)
+    pub classification_labels: Option<Vec<(u8, String)>>,
 }
 
 impl SdfSceneDescriptor {
@@ -43,6 +45,7 @@ impl SdfSceneDescriptor {
             fallback_color: [0, 0, 0],
             scene_version: 1,
             scene_name: None,
+            classification_labels: None,
         }
     }
 
@@ -118,6 +121,8 @@ pub enum SdfDeltaType {
     StructuralChange = 0x04,
     /// Lighting update
     LightingUpdate = 0x05,
+    /// SVO chunk delta (Sparse Voxel Octree incremental update from edge devices)
+    SvoChunkDelta = 0x06,
 }
 
 impl SdfSceneDelta {
@@ -148,6 +153,16 @@ impl SdfSceneDelta {
             new_scene_version: ref_version + 1,
             delta_type: SdfDeltaType::FullReplace,
             delta_data: asdf_data,
+        }
+    }
+
+    /// Create an SVO chunk delta (from edge device 3D scanner)
+    pub fn svo_chunk_delta(ref_version: u32, chunk_data: Vec<u8>) -> Self {
+        Self {
+            ref_scene_version: ref_version,
+            new_scene_version: ref_version + 1,
+            delta_type: SdfDeltaType::SvoChunkDelta,
+            delta_data: chunk_data,
         }
     }
 
@@ -306,7 +321,8 @@ impl HybridBandwidthStats {
             return (0.0, 1.0);
         }
         let ratio = self.traditional_total_bytes as f64 / self.hybrid_total_bytes.max(1) as f64;
-        let savings = (1.0 - self.hybrid_total_bytes as f64 / self.traditional_total_bytes as f64) * 100.0;
+        let savings =
+            (1.0 - self.hybrid_total_bytes as f64 / self.traditional_total_bytes as f64) * 100.0;
         (savings, ratio)
     }
 
@@ -328,15 +344,25 @@ impl HybridBandwidthStats {
              Traditional:    {:>8} bytes ({:.1} KB)\n\
              \n\
              Savings: {:.1}% (compression ratio: {:.1}x)",
-            self.frame_width, self.frame_height, self.frame_count,
-            self.sdf_scene_bytes, self.sdf_scene_bytes as f64 / 1024.0,
-            self.sdf_delta_bytes, self.sdf_delta_bytes as f64 / 1024.0,
-            self.person_mask_bytes, self.person_mask_bytes as f64 / 1024.0,
-            self.person_video_bytes, self.person_video_bytes as f64 / 1024.0,
-            self.audio_bytes, self.audio_bytes as f64 / 1024.0,
-            self.hybrid_total_bytes, self.hybrid_total_bytes as f64 / 1024.0,
-            self.traditional_total_bytes, self.traditional_total_bytes as f64 / 1024.0,
-            savings, ratio,
+            self.frame_width,
+            self.frame_height,
+            self.frame_count,
+            self.sdf_scene_bytes,
+            self.sdf_scene_bytes as f64 / 1024.0,
+            self.sdf_delta_bytes,
+            self.sdf_delta_bytes as f64 / 1024.0,
+            self.person_mask_bytes,
+            self.person_mask_bytes as f64 / 1024.0,
+            self.person_video_bytes,
+            self.person_video_bytes as f64 / 1024.0,
+            self.audio_bytes,
+            self.audio_bytes as f64 / 1024.0,
+            self.hybrid_total_bytes,
+            self.hybrid_total_bytes as f64 / 1024.0,
+            self.traditional_total_bytes,
+            self.traditional_total_bytes as f64 / 1024.0,
+            savings,
+            ratio,
         )
     }
 }
@@ -430,12 +456,12 @@ mod tests {
     #[test]
     fn test_hybrid_bandwidth_stats() {
         let stats = HybridBandwidthStats {
-            sdf_scene_bytes: 5_000,      // 5 KB SDF scene
-            sdf_delta_bytes: 500,         // 500 bytes deltas
-            person_mask_bytes: 300,       // 300 bytes mask
-            person_video_bytes: 50_000,   // 50 KB person video
+            sdf_scene_bytes: 5_000,     // 5 KB SDF scene
+            sdf_delta_bytes: 500,       // 500 bytes deltas
+            person_mask_bytes: 300,     // 300 bytes mask
+            person_video_bytes: 50_000, // 50 KB person video
             audio_bytes: 0,
-            hybrid_total_bytes: 55_800,   // total
+            hybrid_total_bytes: 55_800,       // total
             traditional_total_bytes: 500_000, // 500 KB traditional
             frame_width: 1920,
             frame_height: 1080,
@@ -444,6 +470,6 @@ mod tests {
 
         let (savings, ratio) = stats.savings();
         assert!(savings > 80.0); // >80% savings
-        assert!(ratio > 5.0);   // >5x compression
+        assert!(ratio > 5.0); // >5x compression
     }
 }

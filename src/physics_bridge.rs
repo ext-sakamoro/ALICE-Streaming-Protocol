@@ -3,8 +3,8 @@
 //! Encode physics body state deltas as ASP D-packets for streaming
 //! deterministic physics simulations over the network.
 
-use alice_physics::{PhysicsWorld, Vec3Fix, Fix128, RigidBody};
-use crate::{DPacketPayload, MotionVector, AspPacket};
+use crate::{AspPacket, DPacketPayload, MotionVector};
+use alice_physics::{Fix128, PhysicsWorld, RigidBody, Vec3Fix};
 
 /// Snapshot of physics body positions for delta computation.
 pub struct PhysicsSnapshot {
@@ -15,10 +15,14 @@ pub struct PhysicsSnapshot {
 impl PhysicsSnapshot {
     /// Capture current body positions from a physics world.
     pub fn capture(world: &PhysicsWorld) -> Self {
-        let positions = world.bodies.iter().map(|body| {
-            let (x, y, z) = body.position.to_f32();
-            [x, y, z]
-        }).collect();
+        let positions = world
+            .bodies
+            .iter()
+            .map(|body| {
+                let (x, y, z) = body.position.to_f32();
+                [x, y, z]
+            })
+            .collect();
         Self { positions }
     }
 
@@ -86,12 +90,15 @@ pub fn d_packet_to_body_deltas(
     motion_vectors: &[MotionVector],
     grid_width: u16,
 ) -> Vec<(usize, f32, f32)> {
-    motion_vectors.iter().map(|mv| {
-        let body_idx = mv.block_y as usize * grid_width as usize + mv.block_x as usize;
-        let dx = mv.dx as f32 / 100.0;
-        let dy = mv.dy as f32 / 100.0;
-        (body_idx, dx, dy)
-    }).collect()
+    motion_vectors
+        .iter()
+        .map(|mv| {
+            let body_idx = mv.block_y as usize * grid_width as usize + mv.block_x as usize;
+            let dx = mv.dx as f32 / 100.0;
+            let dy = mv.dy as f32 / 100.0;
+            (body_idx, dx, dy)
+        })
+        .collect()
 }
 
 #[cfg(test)]

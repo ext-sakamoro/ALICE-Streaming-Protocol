@@ -339,7 +339,10 @@ mod tests {
             header.write_to_ptr(buffer.as_mut_ptr());
         }
 
-        assert_eq!(buffer, expected, "write_to_ptr should produce same output as to_bytes");
+        assert_eq!(
+            buffer, expected,
+            "write_to_ptr should produce same output as to_bytes"
+        );
     }
 
     #[test]

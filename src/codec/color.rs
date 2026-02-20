@@ -50,12 +50,22 @@ impl ColorExtractor {
 
     /// Extract dominant colors from RGB image data
     pub fn extract(&self, pixels: &[u8]) -> Vec<Color> {
-        extract_dominant_colors(pixels, self.num_colors, self.max_iterations, self.sampling_rate)
+        extract_dominant_colors(
+            pixels,
+            self.num_colors,
+            self.max_iterations,
+            self.sampling_rate,
+        )
     }
 
     /// Extract with weights (how many pixels are closest to each color)
     pub fn extract_with_weights(&self, pixels: &[u8]) -> (Vec<Color>, Vec<f32>) {
-        kmeans_palette(pixels, self.num_colors, self.max_iterations, self.sampling_rate)
+        kmeans_palette(
+            pixels,
+            self.num_colors,
+            self.max_iterations,
+            self.sampling_rate,
+        )
     }
 }
 
@@ -199,11 +209,7 @@ fn kmeans_pp_init(pixels: &[[u8; 3]], k: usize) -> Vec<Color> {
 }
 
 /// Assign pixels to nearest centroid
-fn assign_to_centroids(
-    pixels: &[[u8; 3]],
-    centroids: &[Color],
-    assignments: &mut [usize],
-) -> bool {
+fn assign_to_centroids(pixels: &[[u8; 3]], centroids: &[Color], assignments: &mut [usize]) -> bool {
     let new_assignments: Vec<usize> = pixels
         .par_iter()
         .map(|p| {
@@ -296,7 +302,11 @@ pub fn median_cut_palette(pixels: &[u8], num_colors: usize) -> Vec<Color> {
         if depth >= max_depth || colors.len() <= 1 {
             // Average the colors in this bucket
             let (sum_r, sum_g, sum_b) = colors.iter().fold((0u64, 0u64, 0u64), |acc, c| {
-                (acc.0 + c[0] as u64, acc.1 + c[1] as u64, acc.2 + c[2] as u64)
+                (
+                    acc.0 + c[0] as u64,
+                    acc.1 + c[1] as u64,
+                    acc.2 + c[2] as u64,
+                )
             });
             let n = colors.len() as u64;
             result.push(Color::new(
@@ -308,9 +318,15 @@ pub fn median_cut_palette(pixels: &[u8], num_colors: usize) -> Vec<Color> {
         }
 
         // Find channel with greatest range
-        let (min_r, max_r) = colors.iter().fold((255u8, 0u8), |acc, c| (acc.0.min(c[0]), acc.1.max(c[0])));
-        let (min_g, max_g) = colors.iter().fold((255u8, 0u8), |acc, c| (acc.0.min(c[1]), acc.1.max(c[1])));
-        let (min_b, max_b) = colors.iter().fold((255u8, 0u8), |acc, c| (acc.0.min(c[2]), acc.1.max(c[2])));
+        let (min_r, max_r) = colors
+            .iter()
+            .fold((255u8, 0u8), |acc, c| (acc.0.min(c[0]), acc.1.max(c[0])));
+        let (min_g, max_g) = colors
+            .iter()
+            .fold((255u8, 0u8), |acc, c| (acc.0.min(c[1]), acc.1.max(c[1])));
+        let (min_b, max_b) = colors
+            .iter()
+            .fold((255u8, 0u8), |acc, c| (acc.0.min(c[2]), acc.1.max(c[2])));
 
         let range_r = max_r - min_r;
         let range_g = max_g - min_g;

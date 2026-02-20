@@ -3,8 +3,8 @@
 //! Embed Sync events (entity motion, spawn, despawn) inside ASP D-packets.
 //! Enables multiplayer game state synchronization over the ASP transport layer.
 
+use crate::{AspPacket, DPacketPayload, MotionVector};
 use alice_sync::{Event, EventKind};
-use crate::{DPacketPayload, MotionVector, AspPacket};
 
 /// Convert Sync motion events into ASP D-packet motion vectors.
 ///
@@ -17,11 +17,7 @@ use crate::{DPacketPayload, MotionVector, AspPacket};
 /// - `events`: Sync events to embed
 /// - `ref_sequence`: ASP reference frame sequence number
 /// - `grid_width`: Virtual grid width for entity → block mapping
-pub fn sync_events_to_d_packet(
-    events: &[Event],
-    ref_sequence: u32,
-    grid_width: u16,
-) -> AspPacket {
+pub fn sync_events_to_d_packet(events: &[Event], ref_sequence: u32, grid_width: u16) -> AspPacket {
     let mut payload = DPacketPayload::new(ref_sequence);
 
     for event in events {
@@ -67,7 +63,10 @@ pub fn d_packet_to_sync_motions(
 
 /// Count how many sync events are motion-type (D-packet compatible).
 pub fn count_motion_events(events: &[Event]) -> usize {
-    events.iter().filter(|e| matches!(&e.kind, EventKind::Motion { .. })).count()
+    events
+        .iter()
+        .filter(|e| matches!(&e.kind, EventKind::Motion { .. }))
+        .count()
 }
 
 #[cfg(test)]

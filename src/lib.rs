@@ -99,10 +99,10 @@
 #![warn(missing_docs)]
 #![warn(clippy::all)]
 
-pub mod types;
+pub mod codec;
 pub mod header;
 pub mod packet;
-pub mod codec;
+pub mod types;
 
 /// FlatBuffers-generated types for cross-language serialization
 ///
@@ -122,28 +122,28 @@ pub mod scene;
 /// Hybrid Streaming Pipeline (SDF + Codec integration)
 pub mod hybrid;
 
+#[cfg(feature = "crypto")]
+pub mod crypto_bridge;
 /// ALICE Media Stack (codec + voice integration)
 #[cfg(any(feature = "codec", feature = "voice"))]
 pub mod media;
-#[cfg(feature = "sync")]
-pub mod sync_bridge;
 #[cfg(feature = "physics")]
 pub mod physics_bridge;
-#[cfg(feature = "crypto")]
-pub mod crypto_bridge;
+#[cfg(feature = "sync")]
+pub mod sync_bridge;
 
 #[cfg(feature = "python")]
 mod python;
 
 // Re-exports for convenience
-pub use types::*;
-pub use header::*;
-pub use packet::*;
 pub use codec::*;
-pub use scene::*;
+pub use header::*;
 pub use hybrid::*;
 #[cfg(any(feature = "codec", feature = "voice"))]
 pub use media::*;
+pub use packet::*;
+pub use scene::*;
+pub use types::*;
 
 /// Library version
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
@@ -197,7 +197,11 @@ mod tests {
         let mvs = codec::estimate_motion(&frame1, &frame2, 64, 64, 16, 8);
 
         // Same frame should produce no motion vectors (all filtered as zero)
-        assert!(mvs.is_empty(), "Identical frames should have no motion: got {} vectors", mvs.len());
+        assert!(
+            mvs.is_empty(),
+            "Identical frames should have no motion: got {} vectors",
+            mvs.len()
+        );
 
         // Test with actual motion (shift pattern in frame2)
         let mut frame2_shifted = vec![0u8; 64 * 64];

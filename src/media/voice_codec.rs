@@ -26,10 +26,8 @@
 //! ```
 
 use alice_voice::{
-    VoiceCodec, VoiceCodecConfig,
-    ParametricParams, SpectralParams,
-    VoiceQuality,
-    voice_to_params, params_to_voice,
+    params_to_voice, voice_to_params, ParametricParams, SpectralParams, VoiceCodec,
+    VoiceCodecConfig, VoiceQuality,
 };
 use serde::{Deserialize, Serialize};
 
@@ -101,12 +99,16 @@ impl VoiceEncoder {
 
         let payload = match self.layer_type {
             AudioLayerType::Parametric => {
-                let params = self.codec.encode_parametric(samples)
+                let params = self
+                    .codec
+                    .encode_parametric(samples)
                     .map_err(|e| format!("Parametric encode failed: {}", e))?;
                 serialize_parametric_params(&params)
             }
             AudioLayerType::Spectral => {
-                let params = self.codec.encode_spectral(samples)
+                let params = self
+                    .codec
+                    .encode_spectral(samples)
                     .map_err(|e| format!("Spectral encode failed: {}", e))?;
                 serialize_spectral_params(&params)
             }
@@ -124,7 +126,11 @@ impl VoiceEncoder {
     }
 
     /// Convenience: encode and return raw bytes (for embedding in HybridFrame)
-    pub fn encode_to_bytes(&mut self, samples: &[f32], timestamp_ms: u64) -> Result<Vec<u8>, String> {
+    pub fn encode_to_bytes(
+        &mut self,
+        samples: &[f32],
+        timestamp_ms: u64,
+    ) -> Result<Vec<u8>, String> {
         let frame = self.encode(samples, timestamp_ms)?;
         Ok(serialize_audio_frame(&frame))
     }
@@ -143,7 +149,11 @@ impl VoiceEncoder {
         frames: &[&[f32]],
         timestamps: &[u64],
     ) -> Vec<Result<AudioFrame, String>> {
-        assert_eq!(frames.len(), timestamps.len(), "frames/timestamps length mismatch");
+        assert_eq!(
+            frames.len(),
+            timestamps.len(),
+            "frames/timestamps length mismatch"
+        );
 
         let base_seq = self.sequence + 1;
         self.sequence += frames.len() as u32;
@@ -155,31 +165,36 @@ impl VoiceEncoder {
         let configs: Vec<_> = frames.iter().zip(timestamps.iter()).enumerate().collect();
         let codec_config = self.codec.config().clone();
 
-        configs.into_iter().map(|(i, (samples, &ts))| {
-            let mut codec = VoiceCodec::new(codec_config.clone());
-            let payload = match layer_type {
-                AudioLayerType::Parametric => {
-                    let params = codec.encode_parametric(samples)
-                        .map_err(|e| format!("Parametric encode failed: {}", e))?;
-                    serialize_parametric_params(&params)
-                }
-                AudioLayerType::Spectral => {
-                    let params = codec.encode_spectral(samples)
-                        .map_err(|e| format!("Spectral encode failed: {}", e))?;
-                    serialize_spectral_params(&params)
-                }
-            };
+        configs
+            .into_iter()
+            .map(|(i, (samples, &ts))| {
+                let mut codec = VoiceCodec::new(codec_config.clone());
+                let payload = match layer_type {
+                    AudioLayerType::Parametric => {
+                        let params = codec
+                            .encode_parametric(samples)
+                            .map_err(|e| format!("Parametric encode failed: {}", e))?;
+                        serialize_parametric_params(&params)
+                    }
+                    AudioLayerType::Spectral => {
+                        let params = codec
+                            .encode_spectral(samples)
+                            .map_err(|e| format!("Spectral encode failed: {}", e))?;
+                        serialize_spectral_params(&params)
+                    }
+                };
 
-            Ok(AudioFrame {
-                sequence: base_seq + i as u32,
-                timestamp_ms: ts,
-                layer_type,
-                sample_rate,
-                frame_size: samples.len(),
-                payload,
-                is_keyframe: i == 0 && base_seq == 1,
+                Ok(AudioFrame {
+                    sequence: base_seq + i as u32,
+                    timestamp_ms: ts,
+                    layer_type,
+                    sample_rate,
+                    frame_size: samples.len(),
+                    payload,
+                    is_keyframe: i == 0 && base_seq == 1,
+                })
             })
-        }).collect()
+            .collect()
     }
 
     /// Get configured sample rate
@@ -242,8 +257,8 @@ impl VoiceDecoder {
 
 /// Quick encode: samples → serialized parametric params (no framing)
 pub fn encode_voice_parametric(samples: &[f32], sample_rate: u32) -> Result<Vec<u8>, String> {
-    let params = voice_to_params(samples, sample_rate)
-        .map_err(|e| format!("Voice encode failed: {}", e))?;
+    let params =
+        voice_to_params(samples, sample_rate).map_err(|e| format!("Voice encode failed: {}", e))?;
     Ok(serialize_parametric_params(&params))
 }
 
@@ -283,19 +298,25 @@ fn deserialize_audio_frame(data: &[u8]) -> Result<AudioFrame, String> {
     let mut pos = 0;
 
     let read_u32 = |data: &[u8], pos: &mut usize| -> Result<u32, String> {
-        if *pos + 4 > data.len() { return Err("Unexpected EOF".into()); }
+        if *pos + 4 > data.len() {
+            return Err("Unexpected EOF".into());
+        }
         let v = u32::from_le_bytes(data[*pos..*pos + 4].try_into().unwrap());
         *pos += 4;
         Ok(v)
     };
     let read_u64 = |data: &[u8], pos: &mut usize| -> Result<u64, String> {
-        if *pos + 8 > data.len() { return Err("Unexpected EOF".into()); }
+        if *pos + 8 > data.len() {
+            return Err("Unexpected EOF".into());
+        }
         let v = u64::from_le_bytes(data[*pos..*pos + 8].try_into().unwrap());
         *pos += 8;
         Ok(v)
     };
     let read_u8 = |data: &[u8], pos: &mut usize| -> Result<u8, String> {
-        if *pos >= data.len() { return Err("Unexpected EOF".into()); }
+        if *pos >= data.len() {
+            return Err("Unexpected EOF".into());
+        }
         let v = data[*pos];
         *pos += 1;
         Ok(v)
@@ -304,7 +325,11 @@ fn deserialize_audio_frame(data: &[u8]) -> Result<AudioFrame, String> {
     let sequence = read_u32(data, &mut pos)?;
     let timestamp_ms = read_u64(data, &mut pos)?;
     let layer_byte = read_u8(data, &mut pos)?;
-    let layer_type = if layer_byte == 1 { AudioLayerType::Spectral } else { AudioLayerType::Parametric };
+    let layer_type = if layer_byte == 1 {
+        AudioLayerType::Spectral
+    } else {
+        AudioLayerType::Parametric
+    };
     let sample_rate = read_u32(data, &mut pos)?;
     let frame_size = read_u32(data, &mut pos)? as usize;
     let is_keyframe = read_u8(data, &mut pos)? != 0;
@@ -371,25 +396,33 @@ fn deserialize_parametric_params(data: &[u8]) -> Result<Vec<ParametricParams>, S
     let mut pos = 0;
 
     let read_u32 = |data: &[u8], pos: &mut usize| -> Result<u32, String> {
-        if *pos + 4 > data.len() { return Err("Unexpected EOF".into()); }
+        if *pos + 4 > data.len() {
+            return Err("Unexpected EOF".into());
+        }
         let v = u32::from_le_bytes(data[*pos..*pos + 4].try_into().unwrap());
         *pos += 4;
         Ok(v)
     };
     let read_u16 = |data: &[u8], pos: &mut usize| -> Result<u16, String> {
-        if *pos + 2 > data.len() { return Err("Unexpected EOF".into()); }
+        if *pos + 2 > data.len() {
+            return Err("Unexpected EOF".into());
+        }
         let v = u16::from_le_bytes(data[*pos..*pos + 2].try_into().unwrap());
         *pos += 2;
         Ok(v)
     };
     let read_f32 = |data: &[u8], pos: &mut usize| -> Result<f32, String> {
-        if *pos + 4 > data.len() { return Err("Unexpected EOF".into()); }
+        if *pos + 4 > data.len() {
+            return Err("Unexpected EOF".into());
+        }
         let v = f32::from_le_bytes(data[*pos..*pos + 4].try_into().unwrap());
         *pos += 4;
         Ok(v)
     };
     let read_u8 = |data: &[u8], pos: &mut usize| -> Result<u8, String> {
-        if *pos >= data.len() { return Err("Unexpected EOF".into()); }
+        if *pos >= data.len() {
+            return Err("Unexpected EOF".into());
+        }
         let v = data[*pos];
         *pos += 1;
         Ok(v)
@@ -476,19 +509,25 @@ fn deserialize_spectral_params(data: &[u8]) -> Result<Vec<SpectralParams>, Strin
     let mut pos = 0;
 
     let read_u32 = |data: &[u8], pos: &mut usize| -> Result<u32, String> {
-        if *pos + 4 > data.len() { return Err("Unexpected EOF".into()); }
+        if *pos + 4 > data.len() {
+            return Err("Unexpected EOF".into());
+        }
         let v = u32::from_le_bytes(data[*pos..*pos + 4].try_into().unwrap());
         *pos += 4;
         Ok(v)
     };
     let read_u16 = |data: &[u8], pos: &mut usize| -> Result<u16, String> {
-        if *pos + 2 > data.len() { return Err("Unexpected EOF".into()); }
+        if *pos + 2 > data.len() {
+            return Err("Unexpected EOF".into());
+        }
         let v = u16::from_le_bytes(data[*pos..*pos + 2].try_into().unwrap());
         *pos += 2;
         Ok(v)
     };
     let read_f32 = |data: &[u8], pos: &mut usize| -> Result<f32, String> {
-        if *pos + 4 > data.len() { return Err("Unexpected EOF".into()); }
+        if *pos + 4 > data.len() {
+            return Err("Unexpected EOF".into());
+        }
         let v = f32::from_le_bytes(data[*pos..*pos + 4].try_into().unwrap());
         *pos += 4;
         Ok(v)

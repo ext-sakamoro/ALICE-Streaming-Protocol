@@ -39,8 +39,7 @@
 //! | **Total** | **5-10 Mbps** | **~0.5-2 Mbps** |
 
 use crate::scene::{
-    SdfSceneDescriptor, SdfSceneDelta, PersonMask,
-    HybridBandwidthStats, rle_encode_mask,
+    rle_encode_mask, HybridBandwidthStats, PersonMask, SdfSceneDelta, SdfSceneDescriptor,
 };
 use serde::{Deserialize, Serialize};
 
@@ -102,7 +101,15 @@ impl HybridTransmitter {
         person_mask: Option<PersonMask>,
         person_video: Vec<u8>,
     ) -> HybridFrame {
-        self.create_keyframe_av(width, height, _fps, sdf_scene, person_mask, person_video, Vec::new())
+        self.create_keyframe_av(
+            width,
+            height,
+            _fps,
+            sdf_scene,
+            person_mask,
+            person_video,
+            Vec::new(),
+        )
     }
 
     /// Create a keyframe with audio/video.
@@ -165,7 +172,13 @@ impl HybridTransmitter {
         person_video: Vec<u8>,
         timestamp_ms: u64,
     ) -> HybridFrame {
-        self.create_delta_frame_av(sdf_delta, person_mask, person_video, Vec::new(), timestamp_ms)
+        self.create_delta_frame_av(
+            sdf_delta,
+            person_mask,
+            person_video,
+            Vec::new(),
+            timestamp_ms,
+        )
     }
 
     /// Create a delta frame with audio/video.
@@ -421,12 +434,7 @@ mod tests {
         let mask = make_test_mask();
         let person_video = vec![0xFFu8; 30_000]; // simulated wavelet data
 
-        let frame = tx.create_keyframe(
-            1920, 1080, 30.0,
-            scene,
-            Some(mask),
-            person_video,
-        );
+        let frame = tx.create_keyframe(1920, 1080, 30.0, scene, Some(mask), person_video);
 
         assert!(frame.is_keyframe);
         assert_eq!(frame.sequence, 1);
@@ -518,10 +526,9 @@ mod tests {
     fn test_estimate_savings() {
         // 1080p, person covers 20% of frame, SDF scene = 5KB
         let (savings, ratio) = estimate_savings(
-            1920, 1080,
-            0.20,   // 20% person
-            5_000,  // 5KB SDF
-            1.0,    // 1 bpp wavelet
+            1920, 1080, 0.20,  // 20% person
+            5_000, // 5KB SDF
+            1.0,   // 1 bpp wavelet
         );
 
         assert!(savings > 70.0, "Should save >70%, got {:.1}%", savings);
@@ -531,7 +538,9 @@ mod tests {
     #[test]
     fn test_create_person_mask() {
         let mut binary_mask = vec![0u8; 100];
-        for i in 30..70 { binary_mask[i] = 1; }
+        for i in 30..70 {
+            binary_mask[i] = 1;
+        }
 
         let mask = create_person_mask(&binary_mask, 10, 10, [3, 3, 4, 4], 40);
         assert_eq!(mask.foreground_pixels, 40);

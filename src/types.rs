@@ -160,7 +160,9 @@ impl TryFrom<u8> for RoiType {
 }
 
 /// Quality level for encoding
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize, Default)]
+#[derive(
+    Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize, Default,
+)]
 #[repr(u8)]
 pub enum QualityLevel {
     /// Low quality (fast encoding, small size)
@@ -346,7 +348,12 @@ pub struct Rect {
 
 impl Rect {
     pub const fn new(x: u32, y: u32, width: u32, height: u32) -> Self {
-        Self { x, y, width, height }
+        Self {
+            x,
+            y,
+            width,
+            height,
+        }
     }
 
     pub fn area(&self) -> u64 {
@@ -391,7 +398,14 @@ pub struct MotionVector {
 impl MotionVector {
     #[inline]
     pub const fn new(block_x: u16, block_y: u16, dx: i16, dy: i16, sad: u32) -> Self {
-        Self { block_x, block_y, dx, dy, sad, _reserved: 0 }
+        Self {
+            block_x,
+            block_y,
+            dx,
+            dy,
+            sad,
+            _reserved: 0,
+        }
     }
 
     /// Create from u32 coordinates (with truncation for legacy compatibility)

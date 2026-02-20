@@ -96,14 +96,11 @@ fn default_quantization_matrix(size: usize) -> Vec<f64> {
     if size == 8 {
         // Standard JPEG luminance quantization matrix
         vec![
-            16.0, 11.0, 10.0, 16.0, 24.0, 40.0, 51.0, 61.0,
-            12.0, 12.0, 14.0, 19.0, 26.0, 58.0, 60.0, 55.0,
-            14.0, 13.0, 16.0, 24.0, 40.0, 57.0, 69.0, 56.0,
-            14.0, 17.0, 22.0, 29.0, 51.0, 87.0, 80.0, 62.0,
-            18.0, 22.0, 37.0, 56.0, 68.0, 109.0, 103.0, 77.0,
-            24.0, 35.0, 55.0, 64.0, 81.0, 104.0, 113.0, 92.0,
-            49.0, 64.0, 78.0, 87.0, 103.0, 121.0, 120.0, 101.0,
-            72.0, 92.0, 95.0, 98.0, 112.0, 100.0, 103.0, 99.0,
+            16.0, 11.0, 10.0, 16.0, 24.0, 40.0, 51.0, 61.0, 12.0, 12.0, 14.0, 19.0, 26.0, 58.0,
+            60.0, 55.0, 14.0, 13.0, 16.0, 24.0, 40.0, 57.0, 69.0, 56.0, 14.0, 17.0, 22.0, 29.0,
+            51.0, 87.0, 80.0, 62.0, 18.0, 22.0, 37.0, 56.0, 68.0, 109.0, 103.0, 77.0, 24.0, 35.0,
+            55.0, 64.0, 81.0, 104.0, 113.0, 92.0, 49.0, 64.0, 78.0, 87.0, 103.0, 121.0, 120.0,
+            101.0, 72.0, 92.0, 95.0, 98.0, 112.0, 100.0, 103.0, 99.0,
         ]
     } else {
         // Generate a generic quantization matrix
@@ -174,7 +171,11 @@ pub fn idct2d(input: &[f64], size: usize) -> Vec<f64> {
 /// Encode DCT coefficients to sparse representation
 ///
 /// Returns only non-zero coefficients as (u, v, value) tuples
-pub fn sparse_dct_encode(coefficients: &[i32], size: usize, threshold: f64) -> Vec<(u32, u32, f32)> {
+pub fn sparse_dct_encode(
+    coefficients: &[i32],
+    size: usize,
+    threshold: f64,
+) -> Vec<(u32, u32, f32)> {
     let threshold_i = (threshold * 1000.0) as i32;
 
     coefficients
@@ -299,7 +300,9 @@ mod tests {
 
     #[test]
     fn test_parallel_processing() {
-        let blocks: Vec<Vec<f64>> = (0..16).map(|_| (0..64).map(|i| i as f64).collect()).collect();
+        let blocks: Vec<Vec<f64>> = (0..16)
+            .map(|_| (0..64).map(|i| i as f64).collect())
+            .collect();
 
         let results = dct2d_parallel(&blocks, 8);
         assert_eq!(results.len(), 16);

@@ -1,6 +1,6 @@
 //! Benchmarks for motion estimation
 
-use criterion::{black_box, criterion_group, criterion_main, Criterion, BenchmarkId};
+use criterion::{black_box, criterion_group, criterion_main, BenchmarkId, Criterion};
 use libasp::codec::motion::{estimate_motion, estimate_motion_parallel, SearchAlgorithm};
 
 fn create_test_frames(width: usize, height: usize) -> (Vec<u8>, Vec<u8>) {
@@ -25,22 +25,9 @@ fn bench_motion_estimation(c: &mut Criterion) {
     for size in [256, 512, 1024].iter() {
         let (current, previous) = create_test_frames(*size, *size);
 
-        group.bench_with_input(
-            BenchmarkId::new("single_thread", size),
-            size,
-            |b, &size| {
-                b.iter(|| {
-                    estimate_motion(
-                        black_box(&current),
-                        black_box(&previous),
-                        size,
-                        size,
-                        16,
-                        8,
-                    )
-                })
-            },
-        );
+        group.bench_with_input(BenchmarkId::new("single_thread", size), size, |b, &size| {
+            b.iter(|| estimate_motion(black_box(&current), black_box(&previous), size, size, 16, 8))
+        });
 
         group.bench_with_input(
             BenchmarkId::new("parallel_diamond", size),

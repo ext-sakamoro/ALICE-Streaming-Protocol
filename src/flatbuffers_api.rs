@@ -40,34 +40,34 @@
 //! ```
 
 use crate::generated;
-use crate::types::{MotionVector as RustMotionVector, Color as RustColor, Rect as RustRect};
+use crate::types::{Color as RustColor, MotionVector as RustMotionVector, Rect as RustRect};
 use flatbuffers::FlatBufferBuilder;
 
 // Re-export FlatBuffers types for convenience
 pub use generated::{
-    PacketType as FbPacketType,
-    PatternType as FbPatternType,
-    MotionType as FbMotionType,
-    RoiType as FbRoiType,
-    QualityLevel as FbQualityLevel,
-    SyncCommand as FbSyncCommand,
-    CompressionFormat as FbCompressionFormat,
-    EasingType as FbEasingType,
-
+    AspPacketPayload,
+    CPacketPayload,
     // Structs (zero-copy accessible)
     Color as FbColor,
-    Point as FbPoint,
-    Rect as FbRect,
-    MotionVector as FbMotionVector,
-    MotionVectorCompact as FbMotionVectorCompact,
+    CompressionFormat as FbCompressionFormat,
+    DPacketPayload,
     DctCoefficient as FbDctCoefficient,
+
+    EasingType as FbEasingType,
 
     // Tables (need accessor methods)
     IPacketPayload,
-    DPacketPayload,
-    CPacketPayload,
+    MotionType as FbMotionType,
+    MotionVector as FbMotionVector,
+    MotionVectorCompact as FbMotionVectorCompact,
+    PacketType as FbPacketType,
+    PatternType as FbPatternType,
+    Point as FbPoint,
+    QualityLevel as FbQualityLevel,
+    Rect as FbRect,
+    RoiType as FbRoiType,
     SPacketPayload,
-    AspPacketPayload,
+    SyncCommand as FbSyncCommand,
 };
 
 /// Error type for FlatBuffers operations
@@ -188,7 +188,11 @@ impl<'a> DPacketBuilder<'a> {
     /// Use this for bandwidth-critical scenarios where block position
     /// is implicit from array index.
     pub fn compact_vectors(mut self, mvs: &[(i8, i8)]) -> Self {
-        self.compact_vectors = Some(mvs.iter().map(|(dx, dy)| FbMotionVectorCompact::new(*dx, *dy)).collect());
+        self.compact_vectors = Some(
+            mvs.iter()
+                .map(|(dx, dy)| FbMotionVectorCompact::new(*dx, *dy))
+                .collect(),
+        );
         self
     }
 
@@ -201,13 +205,15 @@ impl<'a> DPacketBuilder<'a> {
     /// Build the packet and return serialized bytes
     pub fn build(mut self) -> Vec<u8> {
         // Create motion vectors vector
-        let mvs_offset = self.motion_vectors.as_ref().map(|mvs| {
-            self.builder.create_vector(mvs)
-        });
+        let mvs_offset = self
+            .motion_vectors
+            .as_ref()
+            .map(|mvs| self.builder.create_vector(mvs));
 
-        let compact_offset = self.compact_vectors.as_ref().map(|mvs| {
-            self.builder.create_vector(mvs)
-        });
+        let compact_offset = self
+            .compact_vectors
+            .as_ref()
+            .map(|mvs| self.builder.create_vector(mvs));
 
         // Build DPacketPayload
         let d_packet = generated::DPacketPayload::create(
@@ -240,13 +246,15 @@ impl<'a> DPacketBuilder<'a> {
     /// Returns the number of bytes written, or an error if the buffer is too small.
     pub fn build_into(mut self, buffer: &mut [u8]) -> FbResult<usize> {
         // Create motion vectors vector
-        let mvs_offset = self.motion_vectors.as_ref().map(|mvs| {
-            self.builder.create_vector(mvs)
-        });
+        let mvs_offset = self
+            .motion_vectors
+            .as_ref()
+            .map(|mvs| self.builder.create_vector(mvs));
 
-        let compact_offset = self.compact_vectors.as_ref().map(|mvs| {
-            self.builder.create_vector(mvs)
-        });
+        let compact_offset = self
+            .compact_vectors
+            .as_ref()
+            .map(|mvs| self.builder.create_vector(mvs));
 
         // Build DPacketPayload
         let d_packet = generated::DPacketPayload::create(
@@ -439,7 +447,9 @@ impl<'a> SPacketBuilder<'a> {
 pub fn read_packet(bytes: &[u8]) -> FbResult<AspPacketPayload<'_>> {
     // Verify file identifier
     if bytes.len() < 8 {
-        return Err(FlatBuffersError::InvalidFormat("Buffer too small".to_string()));
+        return Err(FlatBuffersError::InvalidFormat(
+            "Buffer too small".to_string(),
+        ));
     }
 
     // Get the root with verification
@@ -464,12 +474,14 @@ pub fn read_d_packet(bytes: &[u8]) -> FbResult<DPacketPayload<'_>> {
     let packet = read_packet(bytes)?;
 
     if packet.payload_type() != generated::AspPayloadUnion::DPacketPayload {
-        return Err(FlatBuffersError::InvalidFormat(
-            format!("Expected DPacketPayload, got {:?}", packet.payload_type())
-        ));
+        return Err(FlatBuffersError::InvalidFormat(format!(
+            "Expected DPacketPayload, got {:?}",
+            packet.payload_type()
+        )));
     }
 
-    packet.payload_as_dpacket_payload()
+    packet
+        .payload_as_dpacket_payload()
         .ok_or_else(|| FlatBuffersError::MissingField("payload"))
 }
 
@@ -478,12 +490,14 @@ pub fn read_i_packet(bytes: &[u8]) -> FbResult<IPacketPayload<'_>> {
     let packet = read_packet(bytes)?;
 
     if packet.payload_type() != generated::AspPayloadUnion::IPacketPayload {
-        return Err(FlatBuffersError::InvalidFormat(
-            format!("Expected IPacketPayload, got {:?}", packet.payload_type())
-        ));
+        return Err(FlatBuffersError::InvalidFormat(format!(
+            "Expected IPacketPayload, got {:?}",
+            packet.payload_type()
+        )));
     }
 
-    packet.payload_as_ipacket_payload()
+    packet
+        .payload_as_ipacket_payload()
         .ok_or_else(|| FlatBuffersError::MissingField("payload"))
 }
 
@@ -492,12 +506,14 @@ pub fn read_s_packet(bytes: &[u8]) -> FbResult<SPacketPayload<'_>> {
     let packet = read_packet(bytes)?;
 
     if packet.payload_type() != generated::AspPayloadUnion::SPacketPayload {
-        return Err(FlatBuffersError::InvalidFormat(
-            format!("Expected SPacketPayload, got {:?}", packet.payload_type())
-        ));
+        return Err(FlatBuffersError::InvalidFormat(format!(
+            "Expected SPacketPayload, got {:?}",
+            packet.payload_type()
+        )));
     }
 
-    packet.payload_as_spacket_payload()
+    packet
+        .payload_as_spacket_payload()
         .ok_or_else(|| FlatBuffersError::MissingField("payload"))
 }
 
@@ -528,16 +544,12 @@ pub fn create_i_packet(width: u32, height: u32, fps: f32, timestamp_ms: u64) -> 
 
 /// Create a Ping packet (convenience function)
 pub fn create_ping(timestamp_ms: u64) -> Vec<u8> {
-    SPacketBuilder::ping()
-        .timestamp_ms(timestamp_ms)
-        .build()
+    SPacketBuilder::ping().timestamp_ms(timestamp_ms).build()
 }
 
 /// Create a Pong packet (convenience function)
 pub fn create_pong(timestamp_ms: u64) -> Vec<u8> {
-    SPacketBuilder::pong()
-        .timestamp_ms(timestamp_ms)
-        .build()
+    SPacketBuilder::pong().timestamp_ms(timestamp_ms).build()
 }
 
 // =============================================================================
@@ -793,9 +805,7 @@ mod tests {
 
     #[test]
     fn test_s_packet_roundtrip() {
-        let bytes = SPacketBuilder::ping()
-            .timestamp_ms(99999)
-            .build();
+        let bytes = SPacketBuilder::ping().timestamp_ms(99999).build();
 
         let packet = read_s_packet(&bytes).unwrap();
         assert_eq!(packet.command(), FbSyncCommand::Ping);
@@ -805,13 +815,22 @@ mod tests {
     #[test]
     fn test_packet_type_detection() {
         let d_bytes = create_d_packet(1, &[], 0);
-        assert_eq!(get_packet_type(&d_bytes).unwrap(), generated::AspPayloadUnion::DPacketPayload);
+        assert_eq!(
+            get_packet_type(&d_bytes).unwrap(),
+            generated::AspPayloadUnion::DPacketPayload
+        );
 
         let i_bytes = create_i_packet(640, 480, 30.0, 0);
-        assert_eq!(get_packet_type(&i_bytes).unwrap(), generated::AspPayloadUnion::IPacketPayload);
+        assert_eq!(
+            get_packet_type(&i_bytes).unwrap(),
+            generated::AspPayloadUnion::IPacketPayload
+        );
 
         let s_bytes = create_ping(0);
-        assert_eq!(get_packet_type(&s_bytes).unwrap(), generated::AspPayloadUnion::SPacketPayload);
+        assert_eq!(
+            get_packet_type(&s_bytes).unwrap(),
+            generated::AspPayloadUnion::SPacketPayload
+        );
     }
 
     #[test]
@@ -831,15 +850,9 @@ mod tests {
 
     #[test]
     fn test_compact_motion_vectors() {
-        let compact = vec![
-            (5i8, -3i8),
-            (2, 1),
-            (-1, 0),
-        ];
+        let compact = vec![(5i8, -3i8), (2, 1), (-1, 0)];
 
-        let bytes = DPacketBuilder::new(1)
-            .compact_vectors(&compact)
-            .build();
+        let bytes = DPacketBuilder::new(1).compact_vectors(&compact).build();
 
         let packet = read_d_packet(&bytes).unwrap();
         let mvs = packet.motion_vectors_compact().unwrap();
@@ -911,7 +924,9 @@ mod tests {
 
         let bytes = encode_i_packet_with_builder(
             &mut builder,
-            1920, 1080, 30.0,
+            1920,
+            1080,
+            30.0,
             FbQualityLevel::High,
             12345,
         );
@@ -927,11 +942,8 @@ mod tests {
     fn test_encode_s_packet_with_builder() {
         let mut builder = FlatBufferBuilder::with_capacity(256);
 
-        let bytes = encode_s_packet_with_builder(
-            &mut builder,
-            FbSyncCommand::RequestKeyframe,
-            99999,
-        );
+        let bytes =
+            encode_s_packet_with_builder(&mut builder, FbSyncCommand::RequestKeyframe, 99999);
 
         let packet = read_s_packet(bytes).unwrap();
         assert_eq!(packet.command(), FbSyncCommand::RequestKeyframe);

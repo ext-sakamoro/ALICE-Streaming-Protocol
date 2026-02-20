@@ -18,13 +18,11 @@
 //! - **Inline hot paths**: `coeffs_to_symbols`, `build_histogram`, pack/unpack
 
 use alice_codec::{
-    Wavelet2D, Wavelet1D,
-    rgb_to_ycocg_r, ycocg_r_to_rgb,
-    Quantizer,
-    RansEncoder, RansDecoder,
-    rans::FrequencyTable,
-    segment::{SegmentConfig, SegmentResult, segment_by_motion},
     color::RGB,
+    rans::FrequencyTable,
+    rgb_to_ycocg_r,
+    segment::{segment_by_motion, SegmentConfig, SegmentResult},
+    ycocg_r_to_rgb, Quantizer, RansDecoder, RansEncoder, Wavelet1D, Wavelet2D,
 };
 use serde::{Deserialize, Serialize};
 
@@ -100,8 +98,13 @@ impl VideoEncoder {
         assert_eq!(rgb_data.len(), n * 3, "RGB data size mismatch");
 
         // 1. RGB → YCoCg-R (reversible color transform)
-        let pixels: Vec<RGB> = rgb_data.chunks_exact(3)
-            .map(|c| RGB { r: c[0], g: c[1], b: c[2] })
+        let pixels: Vec<RGB> = rgb_data
+            .chunks_exact(3)
+            .map(|c| RGB {
+                r: c[0],
+                g: c[1],
+                b: c[2],
+            })
             .collect();
 
         let mut y_plane = vec![0i16; n];
@@ -118,21 +121,34 @@ impl VideoEncoder {
         // 3. Process Y/Co/Cg channels in parallel (wavelet → quantize → symbols → rANS)
         let wavelet = &self.wavelet;
         let ((y_result, co_result), cg_result) = rayon::join(
-            || rayon::join(
-                || encode_channel(wavelet, &y_plane, width, height, step),
-                || encode_channel(wavelet, &co_plane, width, height, step),
-            ),
+            || {
+                rayon::join(
+                    || encode_channel(wavelet, &y_plane, width, height, step),
+                    || encode_channel(wavelet, &co_plane, width, height, step),
+                )
+            },
             || encode_channel(wavelet, &cg_plane, width, height, step),
         );
 
         // 4. Pack into output: header + histograms + bitstreams
         pack_compressed_frame(
-            width as u32, height as u32,
-            step, step, step,
-            y_result.min_val, co_result.min_val, cg_result.min_val,
-            y_result.scale, co_result.scale, cg_result.scale,
-            &y_result.histogram, &co_result.histogram, &cg_result.histogram,
-            &y_result.bitstream, &co_result.bitstream, &cg_result.bitstream,
+            width as u32,
+            height as u32,
+            step,
+            step,
+            step,
+            y_result.min_val,
+            co_result.min_val,
+            cg_result.min_val,
+            y_result.scale,
+            co_result.scale,
+            cg_result.scale,
+            &y_result.histogram,
+            &co_result.histogram,
+            &cg_result.histogram,
+            &y_result.bitstream,
+            &co_result.bitstream,
+            &cg_result.bitstream,
         )
     }
 
@@ -218,12 +234,23 @@ impl VideoDecoder {
     /// (rgb_data, width, height)
     pub fn decode_frame(&self, compressed: &[u8]) -> Option<(Vec<u8>, u32, u32)> {
         let (
-            width, height,
-            q_step_y, q_step_co, q_step_cg,
-            y_min, co_min, cg_min,
-            y_scale, co_scale, cg_scale,
-            y_hist, co_hist, cg_hist,
-            bs_y, bs_co, bs_cg,
+            width,
+            height,
+            q_step_y,
+            q_step_co,
+            q_step_cg,
+            y_min,
+            co_min,
+            cg_min,
+            y_scale,
+            co_scale,
+            cg_scale,
+            y_hist,
+            co_hist,
+            cg_hist,
+            bs_y,
+            bs_co,
+            bs_cg,
         ) = unpack_compressed_frame(compressed)?;
 
         let w = width as usize;
@@ -233,23 +260,40 @@ impl VideoDecoder {
         // 1. Decode Y/Co/Cg channels in parallel (rANS → dequantize → inverse wavelet)
         let wavelet = &self.wavelet;
         let ((mut y_i32, mut co_i32), mut cg_i32) = rayon::join(
-            || rayon::join(
-                || decode_channel(wavelet, &bs_y, &y_hist, n, y_min, y_scale, q_step_y, w, h),
-                || decode_channel(wavelet, &bs_co, &co_hist, n, co_min, co_scale, q_step_co, w, h),
-            ),
-            || decode_channel(wavelet, &bs_cg, &cg_hist, n, cg_min, cg_scale, q_step_cg, w, h),
+            || {
+                rayon::join(
+                    || decode_channel(wavelet, &bs_y, &y_hist, n, y_min, y_scale, q_step_y, w, h),
+                    || {
+                        decode_channel(
+                            wavelet, &bs_co, &co_hist, n, co_min, co_scale, q_step_co, w, h,
+                        )
+                    },
+                )
+            },
+            || {
+                decode_channel(
+                    wavelet, &bs_cg, &cg_hist, n, cg_min, cg_scale, q_step_cg, w, h,
+                )
+            },
         );
 
         // 2. YCoCg-R → RGB (in-place i32→i16 conversion, reuse buffers)
         self.decode_y_buffer.clear();
         self.decode_y_buffer.extend(y_i32.iter().map(|&v| v as i16));
         self.decode_co_buffer.clear();
-        self.decode_co_buffer.extend(co_i32.iter().map(|&v| v as i16));
+        self.decode_co_buffer
+            .extend(co_i32.iter().map(|&v| v as i16));
         self.decode_cg_buffer.clear();
-        self.decode_cg_buffer.extend(cg_i32.iter().map(|&v| v as i16));
+        self.decode_cg_buffer
+            .extend(cg_i32.iter().map(|&v| v as i16));
 
         let mut rgb_out = vec![RGB { r: 0, g: 0, b: 0 }; n];
-        ycocg_r_to_rgb(&self.decode_y_buffer, &self.decode_co_buffer, &self.decode_cg_buffer, &mut rgb_out);
+        ycocg_r_to_rgb(
+            &self.decode_y_buffer,
+            &self.decode_co_buffer,
+            &self.decode_cg_buffer,
+            &mut rgb_out,
+        );
 
         // 3. RGB struct → flat bytes (pre-allocated)
         let mut rgb_bytes = Vec::with_capacity(n * 3);
@@ -305,7 +349,12 @@ fn encode_channel(
     encoder.encode_symbols(&symbols, &table);
     let bitstream = encoder.finish();
 
-    ChannelEncodeResult { min_val, scale, histogram, bitstream }
+    ChannelEncodeResult {
+        min_val,
+        scale,
+        histogram,
+        bitstream,
+    }
 }
 
 /// Decode a single color channel: rANS bitstream → dequantize → inverse wavelet → i32 plane
@@ -363,10 +412,13 @@ fn coeffs_to_symbols(coeffs: &[i32]) -> (Vec<u8>, i32, f32) {
 
     // Range > 255: scale down to fit u8
     let scale = 255.0 / range as f32;
-    let symbols: Vec<u8> = coeffs.iter().map(|&v| {
-        let scaled = ((v - min_val) as f32 * scale) as i32;
-        scaled.clamp(0, 255) as u8
-    }).collect();
+    let symbols: Vec<u8> = coeffs
+        .iter()
+        .map(|&v| {
+            let scaled = ((v - min_val) as f32 * scale) as i32;
+            scaled.clamp(0, 255) as u8
+        })
+        .collect();
 
     (symbols, min_val, scale)
 }
@@ -379,9 +431,10 @@ fn symbols_to_coeffs(symbols: &[u8], min_val: i32, scale: f32) -> Vec<i32> {
         return symbols.iter().map(|&s| s as i32 + min_val).collect();
     }
     let inv_scale = 1.0 / scale;
-    symbols.iter().map(|&s| {
-        (s as f32 * inv_scale + 0.5) as i32 + min_val
-    }).collect()
+    symbols
+        .iter()
+        .map(|&s| (s as f32 * inv_scale + 0.5) as i32 + min_val)
+        .collect()
 }
 
 /// Build 256-bin histogram from u8 symbols
@@ -402,17 +455,28 @@ fn build_histogram(symbols: &[u8]) -> Vec<u32> {
 /// [4: bs_y_len][bs_y...][4: bs_co_len][bs_co...][4: bs_cg_len][bs_cg...]
 #[inline]
 fn pack_compressed_frame(
-    width: u32, height: u32,
-    q_step_y: i32, q_step_co: i32, q_step_cg: i32,
-    y_min: i32, co_min: i32, cg_min: i32,
-    y_scale: f32, co_scale: f32, cg_scale: f32,
-    y_hist: &[u32], co_hist: &[u32], cg_hist: &[u32],
-    bs_y: &[u8], bs_co: &[u8], bs_cg: &[u8],
+    width: u32,
+    height: u32,
+    q_step_y: i32,
+    q_step_co: i32,
+    q_step_cg: i32,
+    y_min: i32,
+    co_min: i32,
+    cg_min: i32,
+    y_scale: f32,
+    co_scale: f32,
+    cg_scale: f32,
+    y_hist: &[u32],
+    co_hist: &[u32],
+    cg_hist: &[u32],
+    bs_y: &[u8],
+    bs_co: &[u8],
+    bs_cg: &[u8],
 ) -> Vec<u8> {
     let mut out = Vec::with_capacity(
         44 + // fixed header
         (256 * 4) * 3 + // histograms
-        bs_y.len() + bs_co.len() + bs_cg.len() + 12 // bitstreams + lengths
+        bs_y.len() + bs_co.len() + bs_cg.len() + 12, // bitstreams + lengths
     );
 
     // Header (44 bytes)
@@ -449,13 +513,26 @@ fn pack_compressed_frame(
 
 /// Unpack compressed frame — returns all components or None on invalid data
 #[allow(clippy::type_complexity)]
-fn unpack_compressed_frame(data: &[u8]) -> Option<(
-    u32, u32,       // width, height
-    i32, i32, i32,  // q_step_y, q_step_co, q_step_cg
-    i32, i32, i32,  // y_min, co_min, cg_min
-    f32, f32, f32,  // y_scale, co_scale, cg_scale
-    Vec<u32>, Vec<u32>, Vec<u32>,  // histograms
-    Vec<u8>, Vec<u8>, Vec<u8>,     // bitstreams
+fn unpack_compressed_frame(
+    data: &[u8],
+) -> Option<(
+    u32,
+    u32, // width, height
+    i32,
+    i32,
+    i32, // q_step_y, q_step_co, q_step_cg
+    i32,
+    i32,
+    i32, // y_min, co_min, cg_min
+    f32,
+    f32,
+    f32, // y_scale, co_scale, cg_scale
+    Vec<u32>,
+    Vec<u32>,
+    Vec<u32>, // histograms
+    Vec<u8>,
+    Vec<u8>,
+    Vec<u8>, // bitstreams
 )> {
     if data.len() < 44 {
         return None;
@@ -464,19 +541,25 @@ fn unpack_compressed_frame(data: &[u8]) -> Option<(
     let mut pos = 0;
 
     let read_u32 = |data: &[u8], pos: &mut usize| -> Option<u32> {
-        if *pos + 4 > data.len() { return None; }
+        if *pos + 4 > data.len() {
+            return None;
+        }
         let v = u32::from_le_bytes(data[*pos..*pos + 4].try_into().ok()?);
         *pos += 4;
         Some(v)
     };
     let read_i32 = |data: &[u8], pos: &mut usize| -> Option<i32> {
-        if *pos + 4 > data.len() { return None; }
+        if *pos + 4 > data.len() {
+            return None;
+        }
         let v = i32::from_le_bytes(data[*pos..*pos + 4].try_into().ok()?);
         *pos += 4;
         Some(v)
     };
     let read_f32 = |data: &[u8], pos: &mut usize| -> Option<f32> {
-        if *pos + 4 > data.len() { return None; }
+        if *pos + 4 > data.len() {
+            return None;
+        }
         let v = f32::from_le_bytes(data[*pos..*pos + 4].try_into().ok()?);
         *pos += 4;
         Some(v)
@@ -509,7 +592,9 @@ fn unpack_compressed_frame(data: &[u8]) -> Option<(
 
     let read_bytes = |data: &[u8], pos: &mut usize| -> Option<Vec<u8>> {
         let len = read_u32(data, pos)? as usize;
-        if *pos + len > data.len() { return None; }
+        if *pos + len > data.len() {
+            return None;
+        }
         let bytes = data[*pos..*pos + len].to_vec();
         *pos += len;
         Some(bytes)
@@ -520,12 +605,8 @@ fn unpack_compressed_frame(data: &[u8]) -> Option<(
     let bs_cg = read_bytes(data, &mut pos)?;
 
     Some((
-        width, height,
-        q_step_y, q_step_co, q_step_cg,
-        y_min, co_min, cg_min,
-        y_scale, co_scale, cg_scale,
-        y_hist, co_hist, cg_hist,
-        bs_y, bs_co, bs_cg,
+        width, height, q_step_y, q_step_co, q_step_cg, y_min, co_min, cg_min, y_scale, co_scale,
+        cg_scale, y_hist, co_hist, cg_hist, bs_y, bs_co, bs_cg,
     ))
 }
 
@@ -568,7 +649,11 @@ mod tests {
             total_error += diff;
         }
         let avg_error = total_error as f64 / rgb_data.len() as f64;
-        assert!(avg_error < 50.0, "Average pixel error too high: {:.1}", avg_error);
+        assert!(
+            avg_error < 50.0,
+            "Average pixel error too high: {:.1}",
+            avg_error
+        );
     }
 
     #[test]
