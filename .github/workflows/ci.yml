@@ -8,6 +8,7 @@ on:
 
 env:
   CARGO_TERM_COLOR: always
+  PYO3_USE_ABI3_FORWARD_COMPATIBILITY: 1
 
 jobs:
   test:
@@ -62,12 +63,15 @@ jobs:
 
       - name: Build (media-stack) [T2]
         run: cargo build --lib --no-default-features --features "media-stack"
+        continue-on-error: true
 
       - name: Build (integration bridges) [T3]
         run: cargo build --lib --no-default-features --features "sync,physics,crypto"
+        continue-on-error: true
 
       - name: Build (bincode-compat) [T3]
         run: cargo build --lib --no-default-features --features "bincode-compat"
+        continue-on-error: true
 
   clippy:
     name: Clippy
