@@ -115,6 +115,7 @@ impl HybridTransmitter {
     /// Create a keyframe with audio/video.
     ///
     /// Same as `create_keyframe` but also carries audio data.
+    #[allow(clippy::too_many_arguments)]
     pub fn create_keyframe_av(
         &mut self,
         width: u32,

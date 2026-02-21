@@ -482,7 +482,7 @@ pub fn read_d_packet(bytes: &[u8]) -> FbResult<DPacketPayload<'_>> {
 
     packet
         .payload_as_dpacket_payload()
-        .ok_or_else(|| FlatBuffersError::MissingField("payload"))
+        .ok_or(FlatBuffersError::MissingField("payload"))
 }
 
 /// Read an I-Packet from bytes (zero-copy)
@@ -498,7 +498,7 @@ pub fn read_i_packet(bytes: &[u8]) -> FbResult<IPacketPayload<'_>> {
 
     packet
         .payload_as_ipacket_payload()
-        .ok_or_else(|| FlatBuffersError::MissingField("payload"))
+        .ok_or(FlatBuffersError::MissingField("payload"))
 }
 
 /// Read an S-Packet from bytes (zero-copy)
@@ -514,7 +514,7 @@ pub fn read_s_packet(bytes: &[u8]) -> FbResult<SPacketPayload<'_>> {
 
     packet
         .payload_as_spacket_payload()
-        .ok_or_else(|| FlatBuffersError::MissingField("payload"))
+        .ok_or(FlatBuffersError::MissingField("payload"))
 }
 
 /// Get packet type without full parsing

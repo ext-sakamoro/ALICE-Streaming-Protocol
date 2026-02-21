@@ -812,14 +812,12 @@ impl PacketEncoder {
         );
         let payload_len = fb_payload.len();
 
-        // Prepare output buffer
+        // Prepare output buffer (resize initialises bytes that are immediately overwritten)
         let total_size = AspPacketHeader::SIZE + payload_len + 4;
-        self.buffer.clear();
-        self.buffer.reserve(total_size);
+        self.buffer.resize(total_size, 0);
 
-        // SAFETY: We're writing exactly total_size bytes
+        // SAFETY: buffer has exactly total_size bytes; we overwrite every byte below
         unsafe {
-            self.buffer.set_len(total_size);
             let ptr = self.buffer.as_mut_ptr();
 
             // Write header using raw pointer (zero bounds check)
@@ -864,14 +862,12 @@ impl PacketEncoder {
         );
         let payload_len = fb_payload.len();
 
-        // Prepare output buffer
+        // Prepare output buffer (resize initialises bytes that are immediately overwritten)
         let total_size = AspPacketHeader::SIZE + payload_len + 4;
-        self.buffer.clear();
-        self.buffer.reserve(total_size);
+        self.buffer.resize(total_size, 0);
 
-        // SAFETY: We're writing exactly total_size bytes
+        // SAFETY: buffer has exactly total_size bytes; we overwrite every byte below
         unsafe {
-            self.buffer.set_len(total_size);
             let ptr = self.buffer.as_mut_ptr();
 
             // Write header using raw pointer (zero bounds check)
@@ -907,14 +903,12 @@ impl PacketEncoder {
             flatbuffers_api::encode_s_packet_with_builder(&mut self.builder, command, timestamp_ms);
         let payload_len = fb_payload.len();
 
-        // Prepare output buffer
+        // Prepare output buffer (resize initialises bytes that are immediately overwritten)
         let total_size = AspPacketHeader::SIZE + payload_len + 4;
-        self.buffer.clear();
-        self.buffer.reserve(total_size);
+        self.buffer.resize(total_size, 0);
 
-        // SAFETY: We're writing exactly total_size bytes
+        // SAFETY: buffer has exactly total_size bytes; we overwrite every byte below
         unsafe {
-            self.buffer.set_len(total_size);
             let ptr = self.buffer.as_mut_ptr();
 
             // Write header using raw pointer (zero bounds check)

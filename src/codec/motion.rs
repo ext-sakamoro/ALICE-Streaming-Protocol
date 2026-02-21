@@ -261,6 +261,7 @@ mod arm_simd {
 // =============================================================================
 
 /// Calculate SAD for a block (dispatches to best available SIMD)
+#[allow(clippy::too_many_arguments)]
 #[inline(always)]
 fn calculate_sad_block(
     current: &[u8],
@@ -332,6 +333,7 @@ fn calculate_sad_block(
 /// Ultra-fast motion estimation using SIMD and parallel processing
 ///
 /// Returns only non-zero motion vectors for bandwidth efficiency
+#[allow(clippy::too_many_arguments)]
 pub fn estimate_motion_fast(
     current: &[u8],
     previous: &[u8],
@@ -349,18 +351,15 @@ pub fn estimate_motion_fast(
         .into_par_iter()
         .flat_map(|by| {
             let mut row_results = Vec::with_capacity(blocks_x);
-            let block_y = by * block_size;
 
             for bx in 0..blocks_x {
-                let block_x = bx * block_size;
-
                 let mv = diamond_search_simd(
                     current,
                     previous,
                     width,
                     height,
-                    block_x,
-                    block_y,
+                    bx,
+                    by,
                     block_size,
                     search_range,
                     early_threshold,
@@ -378,19 +377,26 @@ pub fn estimate_motion_fast(
     results
 }
 
-/// Diamond search with SIMD acceleration
+/// Diamond search with SIMD acceleration.
+///
+/// `bx` / `by` are the block-grid indices (pixel coords = bx * block_size, etc.).
+/// Passing them in avoids any division inside the hot path.
+#[allow(clippy::too_many_arguments)]
 #[inline(always)]
 fn diamond_search_simd(
     current: &[u8],
     previous: &[u8],
     width: usize,
     height: usize,
-    block_x: usize,
-    block_y: usize,
+    bx: usize,
+    by: usize,
     block_size: usize,
     search_range: usize,
     early_threshold: u32,
 ) -> MotionVector {
+    let block_x = bx * block_size;
+    let block_y = by * block_size;
+
     let mut best_x = 0i32;
     let mut best_y = 0i32;
     let mut best_sad = calculate_sad_block(
@@ -399,13 +405,7 @@ fn diamond_search_simd(
 
     // Early termination for static blocks
     if best_sad < early_threshold {
-        return MotionVector::new(
-            (block_x / block_size) as u16,
-            (block_y / block_size) as u16,
-            0,
-            0,
-            best_sad,
-        );
+        return MotionVector::new(bx as u16, by as u16, 0, 0, best_sad);
     }
 
     let search_range_i = search_range as i32;
@@ -469,8 +469,8 @@ fn diamond_search_simd(
                 // Early termination
                 if best_sad < early_threshold {
                     return MotionVector::new(
-                        (block_x / block_size) as u16,
-                        (block_y / block_size) as u16,
+                        bx as u16,
+                        by as u16,
                         best_x as i16,
                         best_y as i16,
                         best_sad,
@@ -529,8 +529,8 @@ fn diamond_search_simd(
     }
 
     MotionVector::new(
-        (block_x / block_size) as u16,
-        (block_y / block_size) as u16,
+        bx as u16,
+        by as u16,
         best_x as i16,
         best_y as i16,
         best_sad,
@@ -562,6 +562,7 @@ pub fn estimate_motion(
 }
 
 /// Estimate motion vectors (parallel)
+#[allow(clippy::too_many_arguments)]
 pub fn estimate_motion_parallel(
     current: &[u8],
     previous: &[u8],

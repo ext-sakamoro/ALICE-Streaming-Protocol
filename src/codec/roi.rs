@@ -371,8 +371,13 @@ fn blocks_to_regions(
     roi_type: RoiType,
     min_size: u32,
 ) -> Vec<RoiRegion> {
-    // Simple approach: each significant block becomes a region
-    // TODO: Implement connected component analysis for merging adjacent blocks
+    // Simple approach: each significant block becomes its own region.
+    // Adjacent blocks that belong to the same connected component are not yet
+    // merged at this stage; coarse merging is handled by `merge_overlapping_regions`,
+    // which performs a greedy bounding-box union pass afterwards.
+    // A proper connected-component labelling (e.g. two-pass union-find over the
+    // block grid) would yield tighter, more accurate ROI bounds and is a
+    // candidate future optimisation once profiling confirms the benefit.
 
     blocks
         .into_iter()
