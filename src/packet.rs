@@ -34,6 +34,7 @@ pub struct ColorPalette {
 }
 
 impl ColorPalette {
+    /// Create a new palette from a list of colors
     pub fn new(colors: Vec<Color>) -> Self {
         Self {
             colors,
@@ -41,6 +42,7 @@ impl ColorPalette {
         }
     }
 
+    /// Create a palette with weighted colors
     pub fn with_weights(colors: Vec<Color>, weights: Vec<f32>) -> Self {
         Self {
             colors,
@@ -48,6 +50,7 @@ impl ColorPalette {
         }
     }
 
+    /// Get the dominant (first) color in the palette
     pub fn dominant_color(&self) -> Option<Color> {
         self.colors.first().copied()
     }
@@ -77,6 +80,7 @@ pub struct RegionDescriptor {
 }
 
 impl RegionDescriptor {
+    /// Create a solid-color region
     pub fn solid(bounds: Rect, color: Color) -> Self {
         Self {
             bounds,
@@ -88,6 +92,7 @@ impl RegionDescriptor {
         }
     }
 
+    /// Create a linear gradient region
     pub fn gradient(bounds: Rect, colors: Vec<Color>) -> Self {
         Self {
             bounds,
@@ -99,6 +104,7 @@ impl RegionDescriptor {
         }
     }
 
+    /// Create a DCT-encoded region with sparse coefficients
     pub fn dct(bounds: Rect, palette: ColorPalette, coefficients: Vec<(u32, u32, f32)>) -> Self {
         Self {
             bounds,
@@ -135,6 +141,7 @@ pub struct IPacketPayload {
 }
 
 impl IPacketPayload {
+    /// Create a new I-Packet payload with frame dimensions and FPS
     pub fn new(width: u32, height: u32, fps: f32) -> Self {
         Self {
             width,
@@ -149,16 +156,19 @@ impl IPacketPayload {
         }
     }
 
+    /// Set the quality level
     pub fn with_quality(mut self, quality: QualityLevel) -> Self {
         self.quality = quality;
         self
     }
 
+    /// Set the global color palette
     pub fn with_palette(mut self, palette: ColorPalette) -> Self {
         self.global_palette = palette;
         self
     }
 
+    /// Add a region descriptor to this I-Packet
     pub fn add_region(&mut self, region: RegionDescriptor) {
         self.regions.push(region);
     }
@@ -197,6 +207,7 @@ pub struct DPacketPayload {
 }
 
 impl DPacketPayload {
+    /// Create a new D-Packet payload referencing a previous packet
     pub fn new(ref_sequence: u32) -> Self {
         Self {
             ref_sequence,
@@ -209,10 +220,12 @@ impl DPacketPayload {
         }
     }
 
+    /// Add a motion vector to this D-Packet
     pub fn add_motion_vector(&mut self, mv: MotionVector) {
         self.motion_vectors.push(mv);
     }
 
+    /// Add a region delta to this D-Packet
     pub fn add_region_delta(&mut self, delta: RegionDelta) {
         self.region_deltas.push(delta);
     }
@@ -254,6 +267,7 @@ pub struct RoiRegion {
 }
 
 impl RoiRegion {
+    /// Create a new ROI region with default priority and confidence
     pub fn new(bounds: Rect, roi_type: RoiType) -> Self {
         Self {
             bounds,
@@ -263,11 +277,13 @@ impl RoiRegion {
         }
     }
 
+    /// Set the priority level
     pub fn with_priority(mut self, priority: u8) -> Self {
         self.priority = priority;
         self
     }
 
+    /// Set the confidence score (clamped to 0.0-1.0)
     pub fn with_confidence(mut self, confidence: f32) -> Self {
         self.confidence = confidence.clamp(0.0, 1.0);
         self
@@ -316,6 +332,7 @@ pub struct CPacketPayload {
 }
 
 impl CPacketPayload {
+    /// Create a new C-Packet payload referencing a previous packet
     pub fn new(ref_sequence: u32) -> Self {
         Self {
             ref_sequence,
@@ -325,11 +342,13 @@ impl CPacketPayload {
         }
     }
 
+    /// Add a correction region to this C-Packet
     pub fn add_correction(&mut self, correction: CorrectionData) {
         self.corrections.push(correction);
         self.correction_count += 1;
     }
 
+    /// Total bytes of correction pixel data
     pub fn total_correction_bytes(&self) -> usize {
         self.corrections.iter().map(|c| c.pixel_delta.len()).sum()
     }
@@ -364,6 +383,7 @@ pub enum SyncData {
 }
 
 impl SPacketPayload {
+    /// Create a keyframe request S-Packet
     pub fn request_keyframe() -> Self {
         Self {
             command: SyncCommand::RequestKeyframe,
@@ -372,6 +392,7 @@ impl SPacketPayload {
         }
     }
 
+    /// Create an acknowledgment S-Packet
     pub fn ack(sequence: u32) -> Self {
         Self {
             command: SyncCommand::Ack,
@@ -380,6 +401,7 @@ impl SPacketPayload {
         }
     }
 
+    /// Create a negative acknowledgment S-Packet
     pub fn nack(sequence: u32) -> Self {
         Self {
             command: SyncCommand::Nack,
@@ -388,6 +410,7 @@ impl SPacketPayload {
         }
     }
 
+    /// Create an end-of-stream S-Packet
     pub fn end_of_stream() -> Self {
         Self {
             command: SyncCommand::EndOfStream,
@@ -396,6 +419,7 @@ impl SPacketPayload {
         }
     }
 
+    /// Create a bitrate adjustment S-Packet
     pub fn bitrate_adjust(bitrate_kbps: u32) -> Self {
         Self {
             command: SyncCommand::BitrateAdjust,
@@ -404,6 +428,7 @@ impl SPacketPayload {
         }
     }
 
+    /// Create a ping S-Packet
     pub fn ping() -> Self {
         Self {
             command: SyncCommand::Ping,
@@ -412,6 +437,7 @@ impl SPacketPayload {
         }
     }
 
+    /// Create a pong S-Packet
     pub fn pong() -> Self {
         Self {
             command: SyncCommand::Pong,
@@ -433,9 +459,13 @@ pub struct AspPacket {
 /// Packet payload enum
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum AspPayload {
+    /// Initial/Keyframe payload
     IPacket(IPacketPayload),
+    /// Delta frame payload
     DPacket(DPacketPayload),
+    /// Correction payload
     CPacket(CPacketPayload),
+    /// Sync/Control payload
     SPacket(SPacketPayload),
 }
 

@@ -47,6 +47,7 @@ impl Default for MotionEstimator {
 }
 
 impl MotionEstimator {
+    /// Create a new motion estimator with block size and search range
     pub fn new(block_size: usize, search_range: usize) -> Self {
         Self {
             block_size,
@@ -55,6 +56,7 @@ impl MotionEstimator {
         }
     }
 
+    /// Set the search algorithm
     pub fn with_algorithm(mut self, algorithm: SearchAlgorithm) -> Self {
         self.algorithm = algorithm;
         self

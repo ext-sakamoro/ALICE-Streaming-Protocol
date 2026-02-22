@@ -233,53 +233,94 @@ impl TryFrom<u8> for SyncCommand {
 /// ASP Error types
 #[derive(Debug, Clone, thiserror::Error)]
 pub enum AspError {
+    /// Invalid magic bytes in packet header
     #[error("Invalid magic bytes")]
     InvalidMagic,
 
+    /// Unrecognized packet type byte
     #[error("Invalid packet type: {0}")]
     InvalidPacketType(u8),
 
+    /// Unrecognized pattern type byte
     #[error("Invalid pattern type: {0}")]
     InvalidPatternType(u8),
 
+    /// Unrecognized motion type byte
     #[error("Invalid motion type: {0}")]
     InvalidMotionType(u8),
 
+    /// Unrecognized ROI type byte
     #[error("Invalid ROI type: {0}")]
     InvalidRoiType(u8),
 
+    /// Unrecognized quality level byte
     #[error("Invalid quality level: {0}")]
     InvalidQualityLevel(u8),
 
+    /// Unrecognized sync command byte
     #[error("Invalid sync command: {0}")]
     InvalidSyncCommand(u8),
 
+    /// Packet exceeds maximum allowed size
     #[error("Packet too large: {size} > {max}")]
-    PacketTooLarge { size: usize, max: usize },
+    PacketTooLarge {
+        /// Actual packet size
+        size: usize,
+        /// Maximum allowed size
+        max: usize,
+    },
 
+    /// Packet data is shorter than expected
     #[error("Incomplete packet: expected {expected}, got {got}")]
-    IncompletePacket { expected: usize, got: usize },
+    IncompletePacket {
+        /// Expected byte count
+        expected: usize,
+        /// Actual byte count
+        got: usize,
+    },
 
+    /// CRC32 checksum verification failed
     #[error("Checksum mismatch: expected {expected:08x}, got {got:08x}")]
-    ChecksumMismatch { expected: u32, got: u32 },
+    ChecksumMismatch {
+        /// Expected checksum
+        expected: u32,
+        /// Computed checksum
+        got: u32,
+    },
 
+    /// Error during packet serialization
     #[error("Serialization error: {0}")]
     SerializationError(String),
 
+    /// Error during packet deserialization
     #[error("Deserialization error: {0}")]
     DeserializationError(String),
 
+    /// Error during video encoding
     #[error("Encoder error: {0}")]
     EncoderError(String),
 
+    /// Error during video decoding
     #[error("Decoder error: {0}")]
     DecoderError(String),
 
+    /// Invalid frame width or height
     #[error("Invalid frame dimensions: {width}x{height}")]
-    InvalidDimensions { width: u32, height: u32 },
+    InvalidDimensions {
+        /// Frame width
+        width: u32,
+        /// Frame height
+        height: u32,
+    },
 
+    /// Sequence number does not match expected value
     #[error("Sequence number mismatch: expected {expected}, got {got}")]
-    SequenceMismatch { expected: u32, got: u32 },
+    SequenceMismatch {
+        /// Expected sequence number
+        expected: u32,
+        /// Received sequence number
+        got: u32,
+    },
 }
 
 /// Result type for ASP operations
@@ -288,28 +329,36 @@ pub type AspResult<T> = Result<T, AspError>;
 /// Color in RGB format
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, Default)]
 pub struct Color {
+    /// Red channel
     pub r: u8,
+    /// Green channel
     pub g: u8,
+    /// Blue channel
     pub b: u8,
 }
 
 impl Color {
+    /// Create a new color from RGB components
     pub const fn new(r: u8, g: u8, b: u8) -> Self {
         Self { r, g, b }
     }
 
+    /// Create black color (0, 0, 0)
     pub const fn black() -> Self {
         Self::new(0, 0, 0)
     }
 
+    /// Create white color (255, 255, 255)
     pub const fn white() -> Self {
         Self::new(255, 255, 255)
     }
 
+    /// Convert to RGB array
     pub fn to_array(self) -> [u8; 3] {
         [self.r, self.g, self.b]
     }
 
+    /// Create from RGB array
     pub fn from_array(arr: [u8; 3]) -> Self {
         Self::new(arr[0], arr[1], arr[2])
     }
@@ -323,15 +372,19 @@ impl Color {
 /// 2D point with integer coordinates
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, Default)]
 pub struct Point {
+    /// X coordinate
     pub x: i32,
+    /// Y coordinate
     pub y: i32,
 }
 
 impl Point {
+    /// Create a new point
     pub const fn new(x: i32, y: i32) -> Self {
         Self { x, y }
     }
 
+    /// Create the origin point (0, 0)
     pub const fn origin() -> Self {
         Self::new(0, 0)
     }
@@ -340,13 +393,18 @@ impl Point {
 /// Rectangle definition
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, Default)]
 pub struct Rect {
+    /// Left edge X coordinate
     pub x: u32,
+    /// Top edge Y coordinate
     pub y: u32,
+    /// Width in pixels
     pub width: u32,
+    /// Height in pixels
     pub height: u32,
 }
 
 impl Rect {
+    /// Create a new rectangle
     pub const fn new(x: u32, y: u32, width: u32, height: u32) -> Self {
         Self {
             x,
@@ -356,14 +414,17 @@ impl Rect {
         }
     }
 
+    /// Calculate area in pixels
     pub fn area(&self) -> u64 {
         self.width as u64 * self.height as u64
     }
 
+    /// Check if a point is inside the rectangle
     pub fn contains(&self, x: u32, y: u32) -> bool {
         x >= self.x && x < self.x + self.width && y >= self.y && y < self.y + self.height
     }
 
+    /// Check if this rectangle intersects with another
     pub fn intersects(&self, other: &Rect) -> bool {
         self.x < other.x + other.width
             && self.x + self.width > other.x
@@ -396,6 +457,7 @@ pub struct MotionVector {
 }
 
 impl MotionVector {
+    /// Create a new motion vector
     #[inline]
     pub const fn new(block_x: u16, block_y: u16, dx: i16, dy: i16, sad: u32) -> Self {
         Self {
@@ -463,16 +525,19 @@ pub struct MotionVectorCompact {
 }
 
 impl MotionVectorCompact {
+    /// Create a new compact motion vector
     #[inline]
     pub const fn new(dx: i8, dy: i8) -> Self {
         Self { dx, dy }
     }
 
+    /// Create a zero motion vector (no displacement)
     #[inline]
     pub const fn zero() -> Self {
         Self { dx: 0, dy: 0 }
     }
 
+    /// Check if this is a zero motion vector
     #[inline]
     pub fn is_zero(&self) -> bool {
         self.dx == 0 && self.dy == 0
@@ -526,12 +591,18 @@ impl Default for AnimationParams {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, Default)]
 #[repr(u8)]
 pub enum EasingType {
+    /// Linear interpolation (default)
     #[default]
     Linear = 0x00,
+    /// Ease-in (slow start)
     EaseIn = 0x01,
+    /// Ease-out (slow end)
     EaseOut = 0x02,
+    /// Ease-in-out (slow start and end)
     EaseInOut = 0x03,
+    /// Bounce effect
     Bounce = 0x04,
+    /// Elastic spring effect
     Elastic = 0x05,
 }
 
@@ -563,10 +634,12 @@ pub struct StreamStats {
 }
 
 impl StreamStats {
+    /// Create new empty stream statistics
     pub fn new() -> Self {
         Self::default()
     }
 
+    /// Record a sent packet in the statistics
     pub fn update_packet(&mut self, packet_type: PacketType, size: usize) {
         self.total_bytes += size as u64;
         self.total_packets += 1;

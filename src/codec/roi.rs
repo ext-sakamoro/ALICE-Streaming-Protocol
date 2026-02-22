@@ -20,6 +20,7 @@ pub struct RoiRegion {
 }
 
 impl RoiRegion {
+    /// Create a new ROI region with default confidence and priority
     pub fn new(bounds: Rect, roi_type: RoiType) -> Self {
         Self {
             bounds,
@@ -29,11 +30,13 @@ impl RoiRegion {
         }
     }
 
+    /// Set the confidence score (clamped to 0.0-1.0)
     pub fn with_confidence(mut self, confidence: f32) -> Self {
         self.confidence = confidence.clamp(0.0, 1.0);
         self
     }
 
+    /// Set the priority level
     pub fn with_priority(mut self, priority: u8) -> Self {
         self.priority = priority;
         self
@@ -89,6 +92,7 @@ impl Default for RoiDetector {
 }
 
 impl RoiDetector {
+    /// Create a new ROI detector with the given configuration
     pub fn new(config: RoiConfig) -> Self {
         Self { config }
     }

@@ -31,6 +31,7 @@ impl Default for ColorExtractor {
 }
 
 impl ColorExtractor {
+    /// Create a new color extractor for the given number of colors
     pub fn new(num_colors: usize) -> Self {
         Self {
             num_colors,
@@ -38,11 +39,13 @@ impl ColorExtractor {
         }
     }
 
+    /// Set maximum k-means iterations
     pub fn with_iterations(mut self, iterations: usize) -> Self {
         self.max_iterations = iterations;
         self
     }
 
+    /// Set pixel sampling rate (0.01-1.0)
     pub fn with_sampling_rate(mut self, rate: f64) -> Self {
         self.sampling_rate = rate.clamp(0.01, 1.0);
         self

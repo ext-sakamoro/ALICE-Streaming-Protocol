@@ -108,6 +108,7 @@ pub mod types;
 ///
 /// This module contains auto-generated code from `schemas/asp.fbs`.
 /// Use `flatbuffers_api` for a higher-level interface.
+#[allow(missing_docs)]
 pub mod generated;
 
 /// FlatBuffers API for zero-copy serialization

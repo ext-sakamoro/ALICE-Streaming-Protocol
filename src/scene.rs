@@ -304,8 +304,9 @@ pub struct HybridBandwidthStats {
     pub hybrid_total_bytes: usize,
     /// Estimated traditional full-frame size (bytes)
     pub traditional_total_bytes: usize,
-    /// Frame dimensions
+    /// Frame width
     pub frame_width: u32,
+    /// Frame height
     pub frame_height: u32,
     /// Number of frames
     pub frame_count: u32,

@@ -50,8 +50,9 @@ pub struct HybridFrame {
     pub sequence: u32,
     /// Frame timestamp (ms)
     pub timestamp_ms: u64,
-    /// Frame dimensions
+    /// Frame width
     pub width: u32,
+    /// Frame height
     pub height: u32,
     /// SDF background scene (present in I-frames, None in D-frames)
     pub sdf_scene: Option<SdfSceneDescriptor>,
@@ -341,8 +342,9 @@ pub struct CompositeInstruction {
     pub person_bbox: Option<[u32; 4]>,
     /// Person video data size in bytes
     pub person_video_size: usize,
-    /// Frame dimensions
+    /// Frame width
     pub frame_width: u32,
+    /// Frame height
     pub frame_height: u32,
 }
 

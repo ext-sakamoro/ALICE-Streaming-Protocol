@@ -83,7 +83,12 @@ pub enum FlatBuffersError {
 
     /// Buffer too small
     #[error("Buffer too small: need {needed}, got {got}")]
-    BufferTooSmall { needed: usize, got: usize },
+    BufferTooSmall {
+        /// Required buffer size
+        needed: usize,
+        /// Actual buffer size
+        got: usize,
+    },
 }
 
 /// Result type for FlatBuffers operations
