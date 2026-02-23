@@ -19,7 +19,7 @@ use serde::{Deserialize, Serialize};
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SdfSceneDescriptor {
     /// ASDF binary blob (ALICE-SDF serialized scene tree)
-    /// Format: [Magic "ASDF" 4B][Version 2B][Flags 2B][NodeCount 4B][CRC 4B][BincodeBody...]
+    /// Format: `[Magic "ASDF" 4B][Version 2B][Flags 2B][NodeCount 4B][CRC 4B][BincodeBody...]`
     pub asdf_data: Vec<u8>,
     /// Scene bounds: (min_x, min_y, min_z, max_x, max_y, max_z)
     pub bounds: [f32; 6],

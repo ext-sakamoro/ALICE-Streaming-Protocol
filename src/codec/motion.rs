@@ -530,13 +530,7 @@ fn diamond_search_simd(
         }
     }
 
-    MotionVector::new(
-        bx as u16,
-        by as u16,
-        best_x as i16,
-        best_y as i16,
-        best_sad,
-    )
+    MotionVector::new(bx as u16, by as u16, best_x as i16, best_y as i16, best_sad)
 }
 
 // =============================================================================
