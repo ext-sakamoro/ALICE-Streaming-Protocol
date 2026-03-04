@@ -1,10 +1,10 @@
-//! Python bindings for libasp using PyO3 + NumPy Zero-Copy
+//! Python bindings for libasp using `PyO3` + `NumPy` Zero-Copy
 //!
 //! High-performance ASP functions with zero-copy data transfer.
 //!
 //! # Optimizations
-//! - Thread Local PacketEncoder (zero allocation per call)
-//! - Direct NumPy → FlatBufferBuilder write (no intermediate Vec)
+//! - Thread Local `PacketEncoder` (zero allocation per call)
+//! - Direct `NumPy` → `FlatBufferBuilder` write (no intermediate Vec)
 //! - Raw pointer iteration (no iterator overhead)
 
 use crate::packet::PacketEncoder;
@@ -56,17 +56,18 @@ thread_local! {
 // Motion Estimation (NumPy Zero-Copy)
 // =============================================================================
 
-/// Fast motion estimation with NumPy zero-copy I/O
+/// Fast motion estimation with `NumPy` zero-copy I/O
 ///
 /// Args:
-///     current: Current frame (H, W) as uint8 NumPy array
-///     previous: Previous frame (H, W) as uint8 NumPy array
-///     block_size: Block size (default: 16)
-///     search_range: Search range in pixels (default: 16)
+///     current: Current frame (H, W) as uint8 `NumPy` array
+///     previous: Previous frame (H, W) as uint8 `NumPy` array
+///     `block_size`: Block size (default: 16)
+///     `search_range`: Search range in pixels (default: 16)
 ///
 /// Returns:
-///     NumPy array (N, 5) of int32: [block_x, block_y, dx, dy, sad]
+///     `NumPy` array (N, 5) of int32: [`block_x`, `block_y`, dx, dy, sad]
 #[pyfunction]
+#[allow(clippy::needless_pass_by_value)]
 #[pyo3(signature = (current, previous, block_size=16, search_range=16))]
 fn estimate_motion_numpy<'py>(
     py: Python<'py>,
@@ -108,10 +109,7 @@ fn estimate_motion_numpy<'py>(
         return numpy::PyArray::from_vec(py, empty)
             .reshape([0, 5])
             .map_err(|e| {
-                pyo3::exceptions::PyRuntimeError::new_err(format!(
-                    "Failed to reshape array: {:?}",
-                    e
-                ))
+                pyo3::exceptions::PyRuntimeError::new_err(format!("Failed to reshape array: {e:?}"))
             });
     }
 
@@ -120,7 +118,7 @@ fn estimate_motion_numpy<'py>(
 
     // Write directly to Python memory
     unsafe {
-        let ptr = array.data() as *mut i32;
+        let ptr = array.data().cast::<i32>();
         for (i, r) in results.iter().enumerate() {
             let base = i * 5;
             *ptr.add(base) = r.block_x as i32;
@@ -136,6 +134,7 @@ fn estimate_motion_numpy<'py>(
 
 /// Legacy motion estimation (returns Python list for compatibility)
 #[pyfunction]
+#[allow(clippy::type_complexity, clippy::unnecessary_wraps)]
 #[pyo3(signature = (current, previous, width, height, block_size=16, search_range=16))]
 fn estimate_motion(
     current: &[u8],
@@ -185,7 +184,7 @@ impl PyMotionEstimator {
         }
     }
 
-    /// Estimate motion with NumPy zero-copy
+    /// Estimate motion with `NumPy` zero-copy
     fn estimate_numpy<'py>(
         &self,
         py: Python<'py>,
@@ -221,7 +220,7 @@ impl PyMotionEstimator {
 // Color Extraction
 // =============================================================================
 
-/// Extract dominant colors (NumPy optimized)
+/// Extract dominant colors (`NumPy` optimized)
 #[pyfunction]
 #[pyo3(signature = (pixels, num_colors=5, max_iterations=10, sampling_rate=0.1))]
 fn extract_colors<'py>(
@@ -247,10 +246,7 @@ fn extract_colors<'py>(
         return numpy::PyArray::from_vec(py, empty)
             .reshape([0, 3])
             .map_err(|e| {
-                pyo3::exceptions::PyRuntimeError::new_err(format!(
-                    "Failed to reshape array: {:?}",
-                    e
-                ))
+                pyo3::exceptions::PyRuntimeError::new_err(format!("Failed to reshape array: {e:?}"))
             });
     }
 
@@ -258,7 +254,7 @@ fn extract_colors<'py>(
 
     // Write directly to Python memory
     unsafe {
-        let ptr = array.data() as *mut u8;
+        let ptr = array.data().cast::<u8>();
         for (i, c) in colors.iter().enumerate() {
             let base = i * 3;
             *ptr.add(base) = c.r;
@@ -272,6 +268,7 @@ fn extract_colors<'py>(
 
 /// Extract colors with weights
 #[pyfunction]
+#[allow(clippy::unnecessary_wraps, clippy::type_complexity)]
 #[pyo3(signature = (pixels, num_colors=5, max_iterations=10, sampling_rate=0.1))]
 fn extract_colors_with_weights<'py>(
     py: Python<'py>,
@@ -296,7 +293,7 @@ fn extract_colors_with_weights<'py>(
 
     // Write colors directly to Python memory
     unsafe {
-        let ptr = colors_array.data() as *mut u8;
+        let ptr = colors_array.data().cast::<u8>();
         for (i, c) in colors.iter().enumerate() {
             let base = i * 3;
             *ptr.add(base) = c.r;
@@ -314,22 +311,25 @@ fn extract_colors_with_weights<'py>(
 // DCT Transform
 // =============================================================================
 
-/// Perform 2D DCT (NumPy optimized)
+/// Perform 2D DCT (`NumPy` optimized)
 #[pyfunction]
-fn dct_2d<'py>(py: Python<'py>, input: Vec<f64>, size: usize) -> Bound<'py, PyArray1<f64>> {
+#[allow(clippy::needless_pass_by_value)]
+fn dct_2d(py: Python<'_>, input: Vec<f64>, size: usize) -> Bound<'_, PyArray1<f64>> {
     let result = dct2d(&input, size);
     result.into_pyarray(py)
 }
 
-/// Perform inverse 2D DCT (NumPy optimized)
+/// Perform inverse 2D DCT (`NumPy` optimized)
 #[pyfunction]
-fn idct_2d<'py>(py: Python<'py>, input: Vec<f64>, size: usize) -> Bound<'py, PyArray1<f64>> {
+#[allow(clippy::needless_pass_by_value)]
+fn idct_2d(py: Python<'_>, input: Vec<f64>, size: usize) -> Bound<'_, PyArray1<f64>> {
     let result = idct2d(&input, size);
     result.into_pyarray(py)
 }
 
 /// Encode DCT coefficients to sparse format
 #[pyfunction]
+#[allow(clippy::needless_pass_by_value)]
 #[pyo3(signature = (coefficients, size, threshold=0.001))]
 fn encode_sparse_dct(coefficients: Vec<i32>, size: usize, threshold: f64) -> Vec<(u32, u32, f32)> {
     sparse_dct_encode(&coefficients, size, threshold)
@@ -337,13 +337,14 @@ fn encode_sparse_dct(coefficients: Vec<i32>, size: usize, threshold: f64) -> Vec
 
 /// Decode sparse format to DCT coefficients
 #[pyfunction]
+#[allow(clippy::needless_pass_by_value)]
 #[pyo3(signature = (sparse, size, default=0))]
-fn decode_sparse_dct<'py>(
-    py: Python<'py>,
+fn decode_sparse_dct(
+    py: Python<'_>,
     sparse: Vec<(u32, u32, f32)>,
     size: usize,
     default: i32,
-) -> Bound<'py, PyArray1<i32>> {
+) -> Bound<'_, PyArray1<i32>> {
     let result = sparse_dct_decode(&sparse, size, default);
     result.into_pyarray(py)
 }
@@ -365,26 +366,32 @@ impl PyDctTransform {
         }
     }
 
+    #[allow(clippy::needless_pass_by_value)]
     fn forward<'py>(&self, py: Python<'py>, block: Vec<f64>) -> Bound<'py, PyArray1<f64>> {
         self.inner.forward(&block).into_pyarray(py)
     }
 
+    #[allow(clippy::needless_pass_by_value)]
     fn inverse<'py>(&self, py: Python<'py>, coefficients: Vec<f64>) -> Bound<'py, PyArray1<f64>> {
         self.inner.inverse(&coefficients).into_pyarray(py)
     }
 
+    #[allow(clippy::needless_pass_by_value)]
     fn quantize<'py>(&self, py: Python<'py>, coefficients: Vec<f64>) -> Bound<'py, PyArray1<i32>> {
         self.inner.quantize(&coefficients).into_pyarray(py)
     }
 
+    #[allow(clippy::needless_pass_by_value)]
     fn dequantize<'py>(&self, py: Python<'py>, quantized: Vec<i32>) -> Bound<'py, PyArray1<f64>> {
         self.inner.dequantize(&quantized).into_pyarray(py)
     }
 
+    #[allow(clippy::needless_pass_by_value)]
     fn encode_sparse(&self, block: Vec<f64>) -> Vec<(u32, u32, f32)> {
         self.inner.encode_sparse(&block)
     }
 
+    #[allow(clippy::needless_pass_by_value)]
     fn decode_sparse<'py>(
         &self,
         py: Python<'py>,
@@ -398,7 +405,7 @@ impl PyDctTransform {
 // ROI Detection
 // =============================================================================
 
-/// Detect regions of interest (NumPy optimized)
+/// Detect regions of interest (`NumPy` optimized)
 #[pyfunction]
 #[pyo3(signature = (current, previous=None, width=0, height=0, edge_threshold=30, motion_threshold=20))]
 fn detect_roi<'py>(
@@ -435,10 +442,7 @@ fn detect_roi<'py>(
         return numpy::PyArray::from_vec(py, empty)
             .reshape([0, 6])
             .map_err(|e| {
-                pyo3::exceptions::PyRuntimeError::new_err(format!(
-                    "Failed to reshape array: {:?}",
-                    e
-                ))
+                pyo3::exceptions::PyRuntimeError::new_err(format!("Failed to reshape array: {e:?}"))
             });
     }
 
@@ -447,7 +451,7 @@ fn detect_roi<'py>(
 
     // Write directly to Python memory
     unsafe {
-        let ptr = array.data() as *mut f32;
+        let ptr = array.data().cast::<f32>();
         for (i, r) in regions.iter().enumerate() {
             let type_id = match r.roi_type {
                 RoiType::General => 0.0,
@@ -494,14 +498,15 @@ fn create_i_packet(
     Ok(PyBytes::new(py, &bytes).into())
 }
 
-/// Create a D-Packet from NumPy motion vectors (Ultra Fast Path)
+/// Create a D-Packet from `NumPy` motion vectors (Ultra Fast Path)
 ///
 /// # Optimization
 /// - Uses Thread Local `PacketEncoder` (zero allocation per call)
-/// - Reads directly from NumPy ptr (zero copy)
-/// - Writes directly to FlatBufferBuilder (no intermediate Vec)
+/// - Reads directly from `NumPy` ptr (zero copy)
+/// - Writes directly to `FlatBufferBuilder` (no intermediate Vec)
 /// - Raw pointer iteration (no iterator overhead)
 #[pyfunction]
+#[allow(clippy::needless_pass_by_value)]
 #[pyo3(signature = (sequence, ref_sequence, motion_vectors, timestamp_ms=0))]
 fn create_d_packet_numpy(
     py: Python<'_>,
@@ -672,23 +677,20 @@ fn version() -> &'static str {
 // Hybrid Streaming (SDF Background + Wavelet Person)
 // =============================================================================
 
-use crate::hybrid::{
-    create_person_mask, estimate_savings, HybridFrame, HybridReceiver, HybridTransmitter,
-};
-use crate::scene::{
-    rle_decode_mask, rle_encode_mask, HybridBandwidthStats, PersonMask, SdfSceneDescriptor,
-};
+use crate::hybrid::{estimate_savings, HybridFrame, HybridReceiver, HybridTransmitter};
+use crate::scene::{rle_decode_mask, rle_encode_mask, PersonMask, SdfSceneDescriptor};
 
-/// RLE encode a binary mask (NumPy zero-copy input).
+/// RLE encode a binary mask (`NumPy` zero-copy input).
 ///
 /// Args:
-///     mask: Binary mask (H, W) as uint8 NumPy array
+///     mask: Binary mask (H, W) as uint8 `NumPy` array
 ///     width: Frame width
 ///     height: Frame height
 ///
 /// Returns:
 ///     RLE-encoded bytes
 #[pyfunction]
+#[allow(clippy::needless_pass_by_value)]
 fn rle_encode_mask_numpy(mask: PyReadonlyArray2<u8>, width: u32, height: u32) -> PyResult<Vec<u8>> {
     let arr = mask.as_array();
     let slice = arr
@@ -697,7 +699,7 @@ fn rle_encode_mask_numpy(mask: PyReadonlyArray2<u8>, width: u32, height: u32) ->
     Ok(rle_encode_mask(slice, width, height))
 }
 
-/// RLE decode to binary mask (returns NumPy array).
+/// RLE decode to binary mask (returns `NumPy` array).
 ///
 /// Args:
 ///     rle: RLE-encoded bytes
@@ -705,7 +707,7 @@ fn rle_encode_mask_numpy(mask: PyReadonlyArray2<u8>, width: u32, height: u32) ->
 ///     height: Frame height
 ///
 /// Returns:
-///     Binary mask as (H, W) uint8 NumPy array
+///     Binary mask as (H, W) uint8 `NumPy` array
 #[pyfunction]
 fn rle_decode_mask_numpy<'py>(
     py: Python<'py>,
@@ -719,20 +721,20 @@ fn rle_decode_mask_numpy<'py>(
     decoded
         .into_pyarray(py)
         .reshape([h, w])
-        .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(format!("{:?}", e)))
+        .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(format!("{e:?}")))
 }
 
 /// Estimate bandwidth savings for hybrid streaming.
 ///
 /// Args:
-///     frame_width: Frame width
-///     frame_height: Frame height
-///     person_coverage: Ratio of person pixels (0.0-1.0)
-///     sdf_scene_bytes: SDF scene size in bytes
-///     wavelet_bpp: Wavelet bits per pixel (default: 1.0)
+///     `frame_width`: Frame width
+///     `frame_height`: Frame height
+///     `person_coverage`: Ratio of person pixels (0.0-1.0)
+///     `sdf_scene_bytes`: SDF scene size in bytes
+///     `wavelet_bpp`: Wavelet bits per pixel (default: 1.0)
 ///
 /// Returns:
-///     Tuple of (savings_percent, compression_ratio)
+///     Tuple of (`savings_percent`, `compression_ratio`)
 #[pyfunction]
 #[pyo3(signature = (frame_width, frame_height, person_coverage, sdf_scene_bytes, wavelet_bpp=1.0))]
 fn estimate_hybrid_savings(
@@ -773,15 +775,16 @@ impl PyHybridTransmitter {
     ///     width: Frame width
     ///     height: Frame height
     ///     fps: Frames per second
-    ///     asdf_data: ASDF binary blob (SDF scene)
-    ///     person_video: Wavelet-encoded person data
-    ///     person_mask_rle: Optional RLE person mask bytes
-    ///     person_bbox: Optional [x, y, w, h] bounding box
-    ///     foreground_pixels: Number of foreground pixels
+    ///     `asdf_data`: ASDF binary blob (SDF scene)
+    ///     `person_video`: Wavelet-encoded person data
+    ///     `person_mask_rle`: Optional RLE person mask bytes
+    ///     `person_bbox`: Optional [x, y, w, h] bounding box
+    ///     `foreground_pixels`: Number of foreground pixels
     ///
     /// Returns:
     ///     Dict with frame info
     #[pyo3(signature = (width, height, fps, asdf_data, person_video, person_mask_rle=None, person_bbox=None, foreground_pixels=0))]
+    #[allow(clippy::too_many_arguments, clippy::unnecessary_wraps)]
     fn create_keyframe(
         &mut self,
         width: u32,
@@ -815,8 +818,9 @@ impl PyHybridTransmitter {
     /// Create a delta frame with optional SDF delta + person update.
     ///
     /// Returns:
-    ///     Tuple of (sequence, is_keyframe, person_video_size)
+    ///     Tuple of (sequence, `is_keyframe`, `person_video_size`)
     #[pyo3(signature = (person_video, timestamp_ms=0, person_mask_rle=None, person_bbox=None, foreground_pixels=0))]
+    #[allow(clippy::unnecessary_wraps)]
     fn create_delta_frame(
         &mut self,
         person_video: Vec<u8>,
@@ -848,7 +852,7 @@ impl PyHybridTransmitter {
         self.inner.stats().report()
     }
 
-    /// Get bandwidth savings as (savings_percent, compression_ratio).
+    /// Get bandwidth savings as (`savings_percent`, `compression_ratio`).
     fn savings(&self) -> (f64, f64) {
         self.inner.stats().savings()
     }
@@ -880,7 +884,7 @@ impl PyHybridReceiver {
         }
     }
 
-    /// Process a keyframe. Returns (render_sdf, scene_version, person_bbox, person_video_size).
+    /// Process a keyframe. Returns (`render_sdf`, `scene_version`, `person_bbox`, `person_video_size`).
     #[pyo3(signature = (sequence, width, height, person_video_size, has_scene=true))]
     fn process_keyframe(
         &mut self,
@@ -917,7 +921,7 @@ impl PyHybridReceiver {
         )
     }
 
-    /// Process a delta frame. Returns (render_sdf, scene_version, person_bbox, person_video_size).
+    /// Process a delta frame. Returns (`render_sdf`, `scene_version`, `person_bbox`, `person_video_size`).
     fn process_delta(
         &mut self,
         sequence: u32,

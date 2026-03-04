@@ -4,6 +4,11 @@
 
 # ALICE Streaming Protocol (libasp)
 
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+[![Rust](https://img.shields.io/badge/rust-1.70%2B-orange.svg)](https://www.rust-lang.org)
+[![Tests](https://img.shields.io/badge/tests-80_passing-brightgreen.svg)](#test-suite)
+[![FlatBuffers](https://img.shields.io/badge/FlatBuffers-cross--language-blueviolet.svg)](#features)
+
 High-performance video streaming codec written in Rust with Python bindings.
 
 **A.L.I.C.E.** = Adaptive Low-bandwidth Image Codec Engine
@@ -378,8 +383,8 @@ Compile-time generated lookup table provides 2.8-5.3x speedup over table-less im
 
 ```bash
 cargo test --no-default-features
-# running 88 tests
-# test result: ok. 88 passed; 0 failed
+# running 80 tests
+# test result: ok. 80 passed; 0 failed
 ```
 
 ## Architecture
@@ -387,23 +392,32 @@ cargo test --no-default-features
 ```
 libasp/
 ├── src/
-│   ├── lib.rs          # Library root, version info
-│   ├── types.rs        # Core types (MotionVector, Color, Rect, etc.)
-│   ├── header.rs       # Packet header (16 bytes) + CRC32
-│   ├── packet.rs       # Packet payloads (I/D/C/S) + serialization
+│   ├── lib.rs              # Library root, version info, re-exports
+│   ├── types.rs            # Core types (MotionVector, Color, Rect, etc.)
+│   ├── header.rs           # Packet header (16 bytes) + CRC32
+│   ├── packet.rs           # Packet payloads (I/D/C/S) + serialization
+│   ├── flatbuffers_api.rs  # FlatBuffers zero-copy API
 │   ├── codec/
-│   │   ├── mod.rs      # Codec module exports
-│   │   ├── motion.rs   # Motion estimation (Diamond/Hexagon/TSS/Full)
-│   │   ├── dct.rs      # DCT/IDCT transform + quantization
-│   │   ├── color.rs    # Color extraction (k-means, median cut)
-│   │   └── roi.rs      # ROI detection (edge, motion, face)
-│   ├── scene.rs        # SDF scene channel (descriptor, delta, person mask, RLE)
-│   ├── hybrid.rs       # Hybrid streaming pipeline (SDF + wavelet person)
+│   │   ├── mod.rs          # Codec module exports
+│   │   ├── motion.rs       # Motion estimation (Diamond/Hexagon/TSS/Full)
+│   │   ├── dct.rs          # DCT/IDCT transform + quantization
+│   │   ├── color.rs        # Color extraction (k-means, median cut)
+│   │   └── roi.rs          # ROI detection (edge, motion, face)
+│   ├── scene.rs            # SDF scene channel (descriptor, delta, person mask, RLE)
+│   ├── hybrid.rs           # Hybrid streaming pipeline (SDF + wavelet person)
+│   ├── generated/          # Auto-generated FlatBuffers code
+│   │   ├── mod.rs
+│   │   └── asp_generated.rs
 │   ├── media/
-│   │   ├── mod.rs      # Media stack module (feature-gated)
+│   │   ├── mod.rs          # Media stack module (feature-gated)
 │   │   ├── video_codec.rs  # Video codec (alice-codec wrapper, Rayon parallel)
 │   │   └── voice_codec.rs  # Voice codec (alice-voice wrapper, batch API)
-│   └── python.rs       # PyO3 + NumPy bindings (motion, color, DCT, ROI, hybrid, media)
+│   ├── sync_bridge.rs      # ALICE-Sync CRDT bridge (feature: sync)
+│   ├── physics_bridge.rs   # Physics state delta bridge (feature: physics)
+│   ├── crypto_bridge.rs    # AEAD encryption bridge (feature: crypto)
+│   └── python.rs           # PyO3 + NumPy bindings
+├── schemas/
+│   └── asp.fbs             # FlatBuffers schema definition
 ├── benches/
 │   └── motion_estimation.rs  # Criterion benchmarks
 └── Cargo.toml
@@ -435,19 +449,21 @@ pub struct MotionVectorCompact {
 }
 ```
 
-## Features Flags
+## Feature Flags
 
-```toml
-[features]
-default = ["python"]
-python = ["pyo3", "numpy"]        # Python bindings
-wasm = ["wasm-bindgen"]           # WebAssembly support
-simd = []                         # Explicit SIMD (auto-detected)
-codec = ["alice-codec"]           # Video codec (3D wavelet + rANS)
-voice = ["alice-voice"]           # Voice codec (LPC parametric)
-media-stack = ["codec", "voice"]  # Full media stack
-crypto = ["alice-crypto"]        # AEAD encryption (DRM)
-```
+| Feature | Dependencies | Description |
+|---------|-------------|-------------|
+| `python` *(default)* | pyo3, numpy | Zero-copy Python bindings |
+| `wasm` | wasm-bindgen | WebAssembly support |
+| `simd` | — | Explicit SIMD (auto-detected on most platforms) |
+| `bincode-compat` | bincode | Legacy Rust-only serialization |
+| `codec` | alice-codec | Video codec (3D wavelet + rANS) |
+| `voice` | alice-voice | Voice codec (LPC parametric) |
+| `media-stack` | codec + voice | Full A/V media pipeline |
+| `sync` | alice-sync | ALICE-Sync CRDT embedded in ASP packets |
+| `physics` | alice-physics | Physics state delta → D-packets |
+| `crypto` | alice-crypto | XChaCha20-Poly1305 AEAD encryption |
+| `all-bridges` | sync + physics + crypto | All integration bridges |
 
 ## License
 
@@ -514,6 +530,24 @@ let recovered = open_packet(&sealed, &key)?;
 | [ALICE-Eco-System](https://github.com/ext-sakamoro/ALICE-Eco-System) | Complete Edge-to-Cloud pipeline demo |
 
 All projects share the core philosophy: **encode the generation process, not the data itself**.
+
+## Quality
+
+| Metric | Value |
+|--------|-------|
+| **Tests** | 80 passed, 0 failures |
+| **clippy pedantic** | 0 warnings |
+| **cargo fmt** | clean |
+| **`#[must_use]`** | 296 annotations |
+| **FlatBuffers** | cross-language (C++, Go, Java, Python, TypeScript) |
+
+## Contributing
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for build, test, and lint instructions.
+
+## Changelog
+
+See [CHANGELOG.md](CHANGELOG.md) for version history.
 
 ## Author
 

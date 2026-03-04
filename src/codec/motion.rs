@@ -1,7 +1,7 @@
 //! Motion Estimation - SIMD Optimized
 //!
 //! High-performance motion estimation using:
-//! - AVX2 (x86_64)
+//! - AVX2 (`x86_64`)
 //! - NEON (aarch64/ARM64)
 //! - Scalar fallback (other platforms)
 
@@ -48,6 +48,7 @@ impl Default for MotionEstimator {
 
 impl MotionEstimator {
     /// Create a new motion estimator with block size and search range
+    #[must_use]
     pub fn new(block_size: usize, search_range: usize) -> Self {
         Self {
             block_size,
@@ -57,12 +58,14 @@ impl MotionEstimator {
     }
 
     /// Set the search algorithm
+    #[must_use]
     pub fn with_algorithm(mut self, algorithm: SearchAlgorithm) -> Self {
         self.algorithm = algorithm;
         self
     }
 
     /// Estimate motion vectors for entire frame (parallel + SIMD)
+    #[must_use]
     pub fn estimate(
         &self,
         current: &[u8],
@@ -180,7 +183,10 @@ mod x86_simd {
 // NEON implementation for ARM64 (Apple M1/M2, etc.)
 #[cfg(target_arch = "aarch64")]
 mod arm_simd {
-    use std::arch::aarch64::*;
+    use std::arch::aarch64::{
+        vabd_u8, vaddq_u32, vaddvq_u32, vcombine_u32, vdupq_n_u32, vget_lane_u64, vld1_u8,
+        vpaddl_u16, vpaddl_u32, vpaddl_u8, vreinterpret_u32_u64,
+    };
 
     /// NEON SAD for 16x16 block
     #[inline(always)]
@@ -336,6 +342,7 @@ fn calculate_sad_block(
 ///
 /// Returns only non-zero motion vectors for bandwidth efficiency
 #[allow(clippy::too_many_arguments)]
+#[must_use]
 pub fn estimate_motion_fast(
     current: &[u8],
     previous: &[u8],
@@ -381,7 +388,7 @@ pub fn estimate_motion_fast(
 
 /// Diamond search with SIMD acceleration.
 ///
-/// `bx` / `by` are the block-grid indices (pixel coords = bx * block_size, etc.).
+/// `bx` / `by` are the block-grid indices (pixel coords = bx * `block_size`, etc.).
 /// Passing them in avoids any division inside the hot path.
 #[allow(clippy::too_many_arguments)]
 #[inline(always)]
@@ -538,6 +545,7 @@ fn diamond_search_simd(
 // =============================================================================
 
 /// Estimate motion vectors (single-threaded, for small frames)
+#[must_use]
 pub fn estimate_motion(
     current: &[u8],
     previous: &[u8],
@@ -559,6 +567,7 @@ pub fn estimate_motion(
 
 /// Estimate motion vectors (parallel)
 #[allow(clippy::too_many_arguments)]
+#[must_use]
 pub fn estimate_motion_parallel(
     current: &[u8],
     previous: &[u8],

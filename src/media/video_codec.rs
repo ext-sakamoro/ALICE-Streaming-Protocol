@@ -67,6 +67,7 @@ pub struct VideoEncoder {
 
 impl VideoEncoder {
     /// Create a new video encoder with the given configuration
+    #[must_use]
     pub fn new(config: VideoCodecConfig) -> Self {
         let w1d = match config.wavelet_type {
             WaveletType::Cdf97 => Wavelet1D::cdf97(),
@@ -80,6 +81,7 @@ impl VideoEncoder {
     }
 
     /// Create with default settings
+    #[must_use]
     pub fn default_config() -> Self {
         Self::new(VideoCodecConfig::default())
     }
@@ -93,6 +95,7 @@ impl VideoEncoder {
     ///
     /// # Returns
     /// Compressed bitstream bytes
+    #[must_use]
     pub fn encode_frame(&self, rgb_data: &[u8], width: usize, height: usize) -> Vec<u8> {
         let n = width * height;
         assert_eq!(rgb_data.len(), n * 3, "RGB data size mismatch");
@@ -163,6 +166,7 @@ impl VideoEncoder {
     ///
     /// # Returns
     /// (compressed_data, SegmentResult) — compressed person region + mask info
+    #[must_use]
     pub fn encode_person_region(
         &self,
         current_rgb: &[u8],
@@ -209,6 +213,7 @@ pub struct VideoDecoder {
 
 impl VideoDecoder {
     /// Create a new video decoder
+    #[must_use]
     pub fn new(wavelet_type: WaveletType) -> Self {
         let w1d = match wavelet_type {
             WaveletType::Cdf97 => Wavelet1D::cdf97(),
@@ -224,6 +229,7 @@ impl VideoDecoder {
     }
 
     /// Create with default (CDF 9/7) wavelet
+    #[must_use]
     pub fn default_config() -> Self {
         Self::new(WaveletType::Cdf97)
     }
@@ -232,6 +238,7 @@ impl VideoDecoder {
     ///
     /// # Returns
     /// (rgb_data, width, height)
+    #[must_use]
     pub fn decode_frame(&self, compressed: &[u8]) -> Option<(Vec<u8>, u32, u32)> {
         let (
             width,

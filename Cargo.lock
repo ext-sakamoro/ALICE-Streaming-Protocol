@@ -39,7 +39,7 @@ dependencies = [
 
 [[package]]
 name = "alice-physics"
-version = "0.4.0"
+version = "0.6.0"
 
 [[package]]
 name = "alice-sync"

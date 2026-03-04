@@ -16,16 +16,16 @@
 //!
 //! ASP supports two serialization formats:
 //!
-//! - **FlatBuffers** (default): Cross-language, zero-copy deserialization
+//! - **`FlatBuffers`** (default): Cross-language, zero-copy deserialization
 //! - **bincode** (legacy): Rust-only, compact binary format
 //!
-//! ## FlatBuffers (Recommended)
+//! ## `FlatBuffers` (Recommended)
 //!
-//! FlatBuffers enables zero-copy access and supports multiple languages
+//! `FlatBuffers` enables zero-copy access and supports multiple languages
 //! (C++, Go, Java, Python, TypeScript, etc.). The schema is defined in
 //! `schemas/asp.fbs`.
 //!
-//! ```rust,ignore
+//! ```rust,no_run
 //! use libasp::flatbuffers_api;
 //!
 //! // Create D-Packet with motion vectors (zero-copy serialization)
@@ -45,7 +45,7 @@
 //!
 //! # Usage
 //!
-//! ```rust,ignore
+//! ```rust,no_run
 //! use libasp::{AspPacket, IPacketPayload, PacketType};
 //!
 //! // Create an I-Packet (keyframe)
@@ -96,6 +96,19 @@
 //!
 //! Moroya Sakamoto
 
+#![allow(
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_precision_loss,
+    clippy::cast_sign_loss,
+    clippy::cast_lossless,
+    clippy::similar_names,
+    clippy::many_single_char_names,
+    clippy::module_name_repetitions,
+    clippy::inline_always,
+    clippy::too_many_lines,
+    clippy::type_complexity
+)]
 #![warn(missing_docs)]
 #![warn(clippy::all)]
 

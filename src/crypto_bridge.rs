@@ -27,6 +27,10 @@ pub struct SealedPacket {
 ///
 /// The sequence number is preserved in cleartext for routing purposes.
 /// The full packet payload is authenticated and encrypted.
+///
+/// # Errors
+///
+/// Returns `Err` if serialization or encryption fails.
 pub fn seal_packet(packet: &AspPacket, key: &Key) -> Result<SealedPacket, String> {
     let bytes = packet.to_bytes().map_err(|e| format!("serialize: {}", e))?;
     let sealed = crypto::seal(key, &bytes).map_err(|e| format!("encrypt: {:?}", e))?;
@@ -37,6 +41,10 @@ pub fn seal_packet(packet: &AspPacket, key: &Key) -> Result<SealedPacket, String
 }
 
 /// Decrypt a sealed ASP packet.
+///
+/// # Errors
+///
+/// Returns `Err` if decryption or deserialization fails.
 pub fn open_packet(sealed: &SealedPacket, key: &Key) -> Result<AspPacket, String> {
     let bytes = crypto::open(key, &sealed.data).map_err(|e| format!("decrypt: {:?}", e))?;
     AspPacket::from_bytes(&bytes).map_err(|e| format!("deserialize: {}", e))
@@ -45,11 +53,13 @@ pub fn open_packet(sealed: &SealedPacket, key: &Key) -> Result<AspPacket, String
 /// Compute a content hash for an ASP packet (without decryption).
 ///
 /// Useful for deduplication of encrypted streams.
+#[must_use]
 pub fn packet_content_hash(sealed: &SealedPacket) -> crypto::Hash {
     crypto::hash(&sealed.data)
 }
 
 /// Derive a stream encryption key from a channel ID and secret.
+#[must_use]
 pub fn derive_stream_key(channel_id: &str, secret: &[u8]) -> Key {
     let context = format!("alice-asp-stream-v1:{}", channel_id);
     let raw = crypto::derive_key(&context, secret);

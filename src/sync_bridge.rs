@@ -17,6 +17,7 @@ use alice_sync::{Event, EventKind};
 /// - `events`: Sync events to embed
 /// - `ref_sequence`: ASP reference frame sequence number
 /// - `grid_width`: Virtual grid width for entity → block mapping
+#[must_use]
 pub fn sync_events_to_d_packet(events: &[Event], ref_sequence: u32, grid_width: u16) -> AspPacket {
     let mut payload = DPacketPayload::new(ref_sequence);
 
@@ -47,6 +48,7 @@ pub fn sync_events_to_d_packet(events: &[Event], ref_sequence: u32, grid_width: 
 ///
 /// - `motion_vectors`: ASP motion vectors from a D-packet
 /// - `grid_width`: Virtual grid width (must match encoder)
+#[must_use]
 pub fn d_packet_to_sync_motions(
     motion_vectors: &[MotionVector],
     grid_width: u16,
@@ -62,6 +64,7 @@ pub fn d_packet_to_sync_motions(
 }
 
 /// Count how many sync events are motion-type (D-packet compatible).
+#[must_use]
 pub fn count_motion_events(events: &[Event]) -> usize {
     events
         .iter()

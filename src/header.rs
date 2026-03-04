@@ -19,6 +19,7 @@ use serde::{Deserialize, Serialize};
 /// 12      4     Payload Length
 /// ```
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[allow(clippy::unsafe_derive_deserialize)]
 #[repr(C)] // C-compatible layout for raw pointer access
 pub struct AspPacketHeader {
     /// Protocol version
@@ -39,6 +40,7 @@ impl AspPacketHeader {
 
     /// Create a new packet header
     #[inline]
+    #[must_use]
     pub fn new(packet_type: PacketType, sequence: u32, payload_length: u32) -> Self {
         Self {
             version: ASP_VERSION,
@@ -51,6 +53,7 @@ impl AspPacketHeader {
 
     /// Serialize header to bytes
     #[inline]
+    #[must_use]
     pub fn to_bytes(&self) -> [u8; Self::SIZE] {
         let mut buf = [0u8; Self::SIZE];
 
@@ -105,6 +108,11 @@ impl AspPacketHeader {
     }
 
     /// Deserialize header from bytes
+    ///
+    /// # Errors
+    ///
+    /// Returns `AspError::IncompletePacket` if `data` is shorter than `Self::SIZE`,
+    /// or `AspError::InvalidMagic` if the magic bytes do not match ASP.
     #[inline]
     pub fn from_bytes(data: &[u8]) -> AspResult<Self> {
         if data.len() < Self::SIZE {
@@ -145,12 +153,14 @@ impl AspPacketHeader {
 
     /// Check if this is a keyframe packet
     #[inline]
+    #[must_use]
     pub fn is_keyframe(&self) -> bool {
         self.packet_type == PacketType::IPacket
     }
 
     /// Check if compression flag is set
     #[inline]
+    #[must_use]
     pub fn is_compressed(&self) -> bool {
         self.flags & 0x0001 != 0
     }
@@ -166,6 +176,7 @@ impl AspPacketHeader {
     }
 
     /// Check if encryption flag is set
+    #[must_use]
     pub fn is_encrypted(&self) -> bool {
         self.flags & 0x0002 != 0
     }
@@ -180,6 +191,7 @@ impl AspPacketHeader {
     }
 
     /// Check if FEC (Forward Error Correction) flag is set
+    #[must_use]
     pub fn has_fec(&self) -> bool {
         self.flags & 0x0004 != 0
     }
@@ -195,6 +207,7 @@ impl AspPacketHeader {
 
     /// Calculate total packet size (header + payload)
     #[inline]
+    #[must_use]
     pub fn total_size(&self) -> usize {
         Self::SIZE + self.payload_length as usize
     }
@@ -208,7 +221,7 @@ impl Default for AspPacketHeader {
 }
 
 /// CRC32 IEEE polynomial
-const CRC32_POLYNOMIAL: u32 = 0xEDB88320;
+const CRC32_POLYNOMIAL: u32 = 0xEDB8_8320;
 
 /// Generate CRC32 lookup table at compile time
 const fn generate_crc32_table() -> [u32; 256] {
@@ -239,8 +252,9 @@ static CRC32_TABLE: [u32; 256] = generate_crc32_table();
 /// Uses a compile-time generated lookup table for maximum performance.
 /// ~8x faster than table-less implementation for typical packet sizes.
 #[inline]
+#[must_use]
 pub fn crc32(data: &[u8]) -> u32 {
-    let mut crc = 0xFFFFFFFF_u32;
+    let mut crc = 0xFFFF_FFFF_u32;
 
     for &byte in data {
         let index = ((crc ^ byte as u32) & 0xFF) as usize;
@@ -252,6 +266,7 @@ pub fn crc32(data: &[u8]) -> u32 {
 
 /// Verify CRC32 checksum
 #[inline]
+#[must_use]
 pub fn verify_crc32(data: &[u8], expected: u32) -> bool {
     crc32(data) == expected
 }

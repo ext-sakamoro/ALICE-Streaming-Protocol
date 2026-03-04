@@ -8,10 +8,10 @@
 //!
 //! # Serialization
 //!
-//! By default, packets are serialized using FlatBuffers for cross-language
+//! By default, packets are serialized using `FlatBuffers` for cross-language
 //! compatibility. Enable the `bincode-compat` feature for legacy bincode support.
 //!
-//! ```rust,ignore
+//! ```rust,no_run
 //! // FlatBuffers (default, cross-language)
 //! let bytes = packet.to_bytes()?;
 //!
@@ -21,7 +21,10 @@
 
 use crate::flatbuffers_api;
 use crate::header::{crc32, AspPacketHeader};
-use crate::types::*;
+use crate::types::{
+    AnimationParams, AspError, AspResult, Color, MotionVector, PacketType, PatternType,
+    QualityLevel, Rect, RoiType, SyncCommand,
+};
 use serde::{Deserialize, Serialize};
 
 /// Color palette for procedural generation
@@ -35,6 +38,7 @@ pub struct ColorPalette {
 
 impl ColorPalette {
     /// Create a new palette from a list of colors
+    #[must_use]
     pub fn new(colors: Vec<Color>) -> Self {
         Self {
             colors,
@@ -43,6 +47,7 @@ impl ColorPalette {
     }
 
     /// Create a palette with weighted colors
+    #[must_use]
     pub fn with_weights(colors: Vec<Color>, weights: Vec<f32>) -> Self {
         Self {
             colors,
@@ -51,6 +56,7 @@ impl ColorPalette {
     }
 
     /// Get the dominant (first) color in the palette
+    #[must_use]
     pub fn dominant_color(&self) -> Option<Color> {
         self.colors.first().copied()
     }
@@ -81,6 +87,7 @@ pub struct RegionDescriptor {
 
 impl RegionDescriptor {
     /// Create a solid-color region
+    #[must_use]
     pub fn solid(bounds: Rect, color: Color) -> Self {
         Self {
             bounds,
@@ -93,6 +100,7 @@ impl RegionDescriptor {
     }
 
     /// Create a linear gradient region
+    #[must_use]
     pub fn gradient(bounds: Rect, colors: Vec<Color>) -> Self {
         Self {
             bounds,
@@ -105,6 +113,7 @@ impl RegionDescriptor {
     }
 
     /// Create a DCT-encoded region with sparse coefficients
+    #[must_use]
     pub fn dct(bounds: Rect, palette: ColorPalette, coefficients: Vec<(u32, u32, f32)>) -> Self {
         Self {
             bounds,
@@ -142,6 +151,7 @@ pub struct IPacketPayload {
 
 impl IPacketPayload {
     /// Create a new I-Packet payload with frame dimensions and FPS
+    #[must_use]
     pub fn new(width: u32, height: u32, fps: f32) -> Self {
         Self {
             width,
@@ -157,12 +167,14 @@ impl IPacketPayload {
     }
 
     /// Set the quality level
+    #[must_use]
     pub fn with_quality(mut self, quality: QualityLevel) -> Self {
         self.quality = quality;
         self
     }
 
     /// Set the global color palette
+    #[must_use]
     pub fn with_palette(mut self, palette: ColorPalette) -> Self {
         self.global_palette = palette;
         self
@@ -208,6 +220,7 @@ pub struct DPacketPayload {
 
 impl DPacketPayload {
     /// Create a new D-Packet payload referencing a previous packet
+    #[must_use]
     pub fn new(ref_sequence: u32) -> Self {
         Self {
             ref_sequence,
@@ -239,14 +252,14 @@ impl DPacketPayload {
         let avg_magnitude: f32 = self
             .motion_vectors
             .iter()
-            .map(|mv| mv.magnitude())
+            .map(super::types::MotionVector::magnitude)
             .sum::<f32>()
             / self.motion_vectors.len() as f32;
 
         let max_magnitude: f32 = self
             .motion_vectors
             .iter()
-            .map(|mv| mv.magnitude())
+            .map(super::types::MotionVector::magnitude)
             .fold(0.0, f32::max);
 
         (avg_magnitude, max_magnitude)
@@ -268,6 +281,7 @@ pub struct RoiRegion {
 
 impl RoiRegion {
     /// Create a new ROI region with default priority and confidence
+    #[must_use]
     pub fn new(bounds: Rect, roi_type: RoiType) -> Self {
         Self {
             bounds,
@@ -278,12 +292,14 @@ impl RoiRegion {
     }
 
     /// Set the priority level
+    #[must_use]
     pub fn with_priority(mut self, priority: u8) -> Self {
         self.priority = priority;
         self
     }
 
     /// Set the confidence score (clamped to 0.0-1.0)
+    #[must_use]
     pub fn with_confidence(mut self, confidence: f32) -> Self {
         self.confidence = confidence.clamp(0.0, 1.0);
         self
@@ -333,6 +349,7 @@ pub struct CPacketPayload {
 
 impl CPacketPayload {
     /// Create a new C-Packet payload referencing a previous packet
+    #[must_use]
     pub fn new(ref_sequence: u32) -> Self {
         Self {
             ref_sequence,
@@ -349,6 +366,7 @@ impl CPacketPayload {
     }
 
     /// Total bytes of correction pixel data
+    #[must_use]
     pub fn total_correction_bytes(&self) -> usize {
         self.corrections.iter().map(|c| c.pixel_delta.len()).sum()
     }
@@ -384,6 +402,7 @@ pub enum SyncData {
 
 impl SPacketPayload {
     /// Create a keyframe request S-Packet
+    #[must_use]
     pub fn request_keyframe() -> Self {
         Self {
             command: SyncCommand::RequestKeyframe,
@@ -393,6 +412,7 @@ impl SPacketPayload {
     }
 
     /// Create an acknowledgment S-Packet
+    #[must_use]
     pub fn ack(sequence: u32) -> Self {
         Self {
             command: SyncCommand::Ack,
@@ -402,6 +422,7 @@ impl SPacketPayload {
     }
 
     /// Create a negative acknowledgment S-Packet
+    #[must_use]
     pub fn nack(sequence: u32) -> Self {
         Self {
             command: SyncCommand::Nack,
@@ -411,6 +432,7 @@ impl SPacketPayload {
     }
 
     /// Create an end-of-stream S-Packet
+    #[must_use]
     pub fn end_of_stream() -> Self {
         Self {
             command: SyncCommand::EndOfStream,
@@ -420,6 +442,7 @@ impl SPacketPayload {
     }
 
     /// Create a bitrate adjustment S-Packet
+    #[must_use]
     pub fn bitrate_adjust(bitrate_kbps: u32) -> Self {
         Self {
             command: SyncCommand::BitrateAdjust,
@@ -429,6 +452,7 @@ impl SPacketPayload {
     }
 
     /// Create a ping S-Packet
+    #[must_use]
     pub fn ping() -> Self {
         Self {
             command: SyncCommand::Ping,
@@ -438,6 +462,7 @@ impl SPacketPayload {
     }
 
     /// Create a pong S-Packet
+    #[must_use]
     pub fn pong() -> Self {
         Self {
             command: SyncCommand::Pong,
@@ -471,6 +496,10 @@ pub enum AspPayload {
 
 impl AspPacket {
     /// Create an I-Packet
+    ///
+    /// # Errors
+    ///
+    /// Currently infallible; returns `Ok` in all cases. Reserved for future validation.
     pub fn create_i_packet(sequence: u32, payload: IPacketPayload) -> AspResult<Self> {
         // Estimate payload size (used for header, actual size computed during serialization)
         let estimated_size = Self::estimate_i_packet_size(&payload);
@@ -482,6 +511,10 @@ impl AspPacket {
     }
 
     /// Create a D-Packet
+    ///
+    /// # Errors
+    ///
+    /// Currently infallible; returns `Ok` in all cases. Reserved for future validation.
     pub fn create_d_packet(sequence: u32, payload: DPacketPayload) -> AspResult<Self> {
         let estimated_size = Self::estimate_d_packet_size(&payload);
 
@@ -492,6 +525,10 @@ impl AspPacket {
     }
 
     /// Create a C-Packet
+    ///
+    /// # Errors
+    ///
+    /// Currently infallible; returns `Ok` in all cases. Reserved for future validation.
     pub fn create_c_packet(sequence: u32, payload: CPacketPayload) -> AspResult<Self> {
         let estimated_size = Self::estimate_c_packet_size(&payload);
 
@@ -502,6 +539,10 @@ impl AspPacket {
     }
 
     /// Create an S-Packet
+    ///
+    /// # Errors
+    ///
+    /// Currently infallible; returns `Ok` in all cases. Reserved for future validation.
     pub fn create_s_packet(sequence: u32, payload: SPacketPayload) -> AspResult<Self> {
         Ok(Self {
             header: AspPacketHeader::new(
@@ -530,19 +571,27 @@ impl AspPacket {
             .sum::<usize>()
     }
 
-    /// Serialize packet to bytes using FlatBuffers (cross-language compatible)
+    /// Serialize packet to bytes using `FlatBuffers` (cross-language compatible)
     ///
     /// This is the default serialization method that produces output
     /// readable by C++, Go, Java, Python, TypeScript, etc.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the underlying `write_to_buffer` call fails.
     pub fn to_bytes(&self) -> AspResult<Vec<u8>> {
         let mut buffer = Vec::new();
         self.write_to_buffer(&mut buffer)?;
         Ok(buffer)
     }
 
-    /// Serialize packet to an existing buffer using FlatBuffers
+    /// Serialize packet to an existing buffer using `FlatBuffers`
     ///
-    /// Format: [Header (16 bytes)] [FlatBuffers Payload] [CRC32 (4 bytes)]
+    /// Format: [Header (16 bytes)] [`FlatBuffers` Payload] [CRC32 (4 bytes)]
+    ///
+    /// # Errors
+    ///
+    /// Currently infallible; reserved for future `FlatBuffers` serialization errors.
     pub fn write_to_buffer(&self, buffer: &mut Vec<u8>) -> AspResult<()> {
         buffer.clear();
 
@@ -555,6 +604,7 @@ impl AspPacket {
                 flatbuffers_api::create_d_packet(p.ref_sequence, &p.motion_vectors, p.timestamp_ms)
             }
             AspPayload::SPacket(p) => {
+                #[allow(clippy::match_same_arms)]
                 match p.command {
                     SyncCommand::Ping => flatbuffers_api::create_ping(p.timestamp_ms),
                     SyncCommand::Pong => flatbuffers_api::create_pong(p.timestamp_ms),
@@ -590,7 +640,12 @@ impl AspPacket {
         Ok(())
     }
 
-    /// Deserialize packet from bytes (FlatBuffers format)
+    /// Deserialize packet from bytes (`FlatBuffers` format)
+    ///
+    /// # Errors
+    ///
+    /// Returns `AspError::IncompletePacket` if data is too short, `AspError::ChecksumMismatch`
+    /// if the CRC32 does not match, or `AspError` variants for invalid `FlatBuffers` data.
     pub fn from_bytes(data: &[u8]) -> AspResult<Self> {
         // Minimum size: header + checksum
         if data.len() < AspPacketHeader::SIZE + 4 {
@@ -669,6 +724,7 @@ impl AspPacket {
             PacketType::SPacket => {
                 let fb = flatbuffers_api::read_s_packet(payload_data)
                     .map_err(|e| AspError::DeserializationError(e.to_string()))?;
+                #[allow(clippy::match_same_arms)]
                 let command = match fb.command() {
                     flatbuffers_api::FbSyncCommand::RequestKeyframe => SyncCommand::RequestKeyframe,
                     flatbuffers_api::FbSyncCommand::Ack => SyncCommand::Ack,
@@ -698,6 +754,7 @@ impl AspPacket {
 
     /// Estimate the serialized size of this packet (for pre-allocation)
     #[inline]
+    #[must_use]
     pub fn estimated_size(&self) -> usize {
         let payload_estimate = match &self.payload {
             AspPayload::IPacket(p) => Self::estimate_i_packet_size(p),
@@ -709,26 +766,31 @@ impl AspPacket {
     }
 
     /// Get packet type
+    #[must_use]
     pub fn packet_type(&self) -> PacketType {
         self.header.packet_type
     }
 
     /// Get sequence number
+    #[must_use]
     pub fn sequence(&self) -> u32 {
         self.header.sequence
     }
 
     /// Check if this is a keyframe
+    #[must_use]
     pub fn is_keyframe(&self) -> bool {
         self.header.is_keyframe()
     }
 
     /// Get payload size
+    #[must_use]
     pub fn payload_size(&self) -> u32 {
         self.header.payload_length
     }
 
     /// Get I-Packet payload (if applicable)
+    #[must_use]
     pub fn as_i_packet(&self) -> Option<&IPacketPayload> {
         match &self.payload {
             AspPayload::IPacket(p) => Some(p),
@@ -737,6 +799,7 @@ impl AspPacket {
     }
 
     /// Get D-Packet payload (if applicable)
+    #[must_use]
     pub fn as_d_packet(&self) -> Option<&DPacketPayload> {
         match &self.payload {
             AspPayload::DPacket(p) => Some(p),
@@ -745,6 +808,7 @@ impl AspPacket {
     }
 
     /// Get C-Packet payload (if applicable)
+    #[must_use]
     pub fn as_c_packet(&self) -> Option<&CPacketPayload> {
         match &self.payload {
             AspPayload::CPacket(p) => Some(p),
@@ -753,6 +817,7 @@ impl AspPacket {
     }
 
     /// Get S-Packet payload (if applicable)
+    #[must_use]
     pub fn as_s_packet(&self) -> Option<&SPacketPayload> {
         match &self.payload {
             AspPayload::SPacket(p) => Some(p),
@@ -774,7 +839,7 @@ use flatbuffers::FlatBufferBuilder;
 ///
 /// # Example
 ///
-/// ```rust,ignore
+/// ```rust,no_run
 /// use libasp::PacketEncoder;
 ///
 /// let mut encoder = PacketEncoder::new();
@@ -791,7 +856,7 @@ use flatbuffers::FlatBufferBuilder;
 /// }
 /// ```
 pub struct PacketEncoder {
-    /// Reusable FlatBufferBuilder (public for direct access in hot paths)
+    /// Reusable `FlatBufferBuilder` (public for direct access in hot paths)
     pub builder: FlatBufferBuilder<'static>,
     /// Reusable output buffer (public for direct access in hot paths)
     pub buffer: Vec<u8>,
@@ -804,16 +869,18 @@ impl Default for PacketEncoder {
 }
 
 impl PacketEncoder {
-    /// Create a new PacketEncoder with default capacity
+    /// Create a new `PacketEncoder` with default capacity
+    #[must_use]
     pub fn new() -> Self {
         Self::with_capacity(4096, 8192)
     }
 
-    /// Create a new PacketEncoder with specified capacities
+    /// Create a new `PacketEncoder` with specified capacities
     ///
     /// # Arguments
-    /// * `builder_capacity` - Initial capacity for FlatBufferBuilder (bytes)
+    /// * `builder_capacity` - Initial capacity for `FlatBufferBuilder` (bytes)
     /// * `buffer_capacity` - Initial capacity for output buffer (bytes)
+    #[must_use]
     pub fn with_capacity(builder_capacity: usize, buffer_capacity: usize) -> Self {
         Self {
             builder: FlatBufferBuilder::with_capacity(builder_capacity),
@@ -962,6 +1029,7 @@ impl PacketEncoder {
     }
 
     /// Get the internal buffer's current capacity
+    #[must_use]
     pub fn buffer_capacity(&self) -> usize {
         self.buffer.capacity()
     }
@@ -974,6 +1042,10 @@ impl PacketEncoder {
 #[cfg(feature = "bincode-compat")]
 impl AspPacket {
     /// Serialize packet to bytes using bincode (Rust-only, legacy)
+    ///
+    /// # Errors
+    ///
+    /// Returns `Err` if bincode serialization fails.
     pub fn to_bytes_bincode(&self) -> AspResult<Vec<u8>> {
         let mut buffer = Vec::new();
         self.write_to_buffer_bincode(&mut buffer)?;
@@ -981,6 +1053,10 @@ impl AspPacket {
     }
 
     /// Serialize packet to an existing buffer using bincode
+    ///
+    /// # Errors
+    ///
+    /// Returns `Err` if bincode serialization fails.
     pub fn write_to_buffer_bincode(&self, buffer: &mut Vec<u8>) -> AspResult<()> {
         buffer.clear();
 
@@ -1036,6 +1112,10 @@ impl AspPacket {
     }
 
     /// Deserialize packet from bytes (bincode format)
+    ///
+    /// # Errors
+    ///
+    /// Returns `Err` if the data is too short, CRC mismatch, or deserialization fails.
     pub fn from_bytes_bincode(data: &[u8]) -> AspResult<Self> {
         if data.len() < AspPacketHeader::SIZE + 4 {
             return Err(AspError::IncompletePacket {

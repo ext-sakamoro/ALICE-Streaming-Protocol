@@ -21,7 +21,7 @@ pub struct SdfSceneDescriptor {
     /// ASDF binary blob (ALICE-SDF serialized scene tree)
     /// Format: `[Magic "ASDF" 4B][Version 2B][Flags 2B][NodeCount 4B][CRC 4B][BincodeBody...]`
     pub asdf_data: Vec<u8>,
-    /// Scene bounds: (min_x, min_y, min_z, max_x, max_y, max_z)
+    /// Scene bounds: (`min_x`, `min_y`, `min_z`, `max_x`, `max_y`, `max_z`)
     pub bounds: [f32; 6],
     /// Render resolution hint (0 = use frame resolution)
     pub render_resolution: u32,
@@ -31,12 +31,13 @@ pub struct SdfSceneDescriptor {
     pub scene_version: u32,
     /// Optional scene name/identifier
     pub scene_name: Option<String>,
-    /// Optional classification labels from edge ML (label_id → label_name)
+    /// Optional classification labels from edge ML (`label_id` → `label_name`)
     pub classification_labels: Option<Vec<(u8, String)>>,
 }
 
 impl SdfSceneDescriptor {
     /// Create a new SDF scene descriptor from ASDF binary data
+    #[must_use]
     pub fn new(asdf_data: Vec<u8>) -> Self {
         Self {
             asdf_data,
@@ -50,35 +51,41 @@ impl SdfSceneDescriptor {
     }
 
     /// Set scene bounds
+    #[must_use]
     pub fn with_bounds(mut self, min: [f32; 3], max: [f32; 3]) -> Self {
         self.bounds = [min[0], min[1], min[2], max[0], max[1], max[2]];
         self
     }
 
     /// Set fallback color
+    #[must_use]
     pub fn with_fallback_color(mut self, r: u8, g: u8, b: u8) -> Self {
         self.fallback_color = [r, g, b];
         self
     }
 
     /// Set render resolution hint
+    #[must_use]
     pub fn with_render_resolution(mut self, res: u32) -> Self {
         self.render_resolution = res;
         self
     }
 
     /// Set scene name
+    #[must_use]
     pub fn with_name(mut self, name: impl Into<String>) -> Self {
         self.scene_name = Some(name.into());
         self
     }
 
     /// Get ASDF data size in bytes
+    #[must_use]
     pub fn asdf_size(&self) -> usize {
         self.asdf_data.len()
     }
 
     /// Validate ASDF magic bytes ("ASDF")
+    #[must_use]
     pub fn is_valid_asdf(&self) -> bool {
         self.asdf_data.len() >= 16
             && self.asdf_data[0] == b'A'
@@ -95,13 +102,13 @@ impl SdfSceneDescriptor {
 /// - Node-level patches (add/remove/modify individual SDF nodes)
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SdfSceneDelta {
-    /// Reference scene version (from I-Packet's scene_version)
+    /// Reference scene version (from I-Packet's `scene_version`)
     pub ref_scene_version: u32,
     /// New scene version after applying this delta
     pub new_scene_version: u32,
     /// Delta type
     pub delta_type: SdfDeltaType,
-    /// Delta payload (interpretation depends on delta_type)
+    /// Delta payload (interpretation depends on `delta_type`)
     pub delta_data: Vec<u8>,
 }
 
@@ -127,6 +134,7 @@ pub enum SdfDeltaType {
 
 impl SdfSceneDelta {
     /// Create an animation update delta
+    #[must_use]
     pub fn animation_update(ref_version: u32, data: Vec<u8>) -> Self {
         Self {
             ref_scene_version: ref_version,
@@ -137,6 +145,7 @@ impl SdfSceneDelta {
     }
 
     /// Create a node transform delta
+    #[must_use]
     pub fn node_transform(ref_version: u32, data: Vec<u8>) -> Self {
         Self {
             ref_scene_version: ref_version,
@@ -147,6 +156,7 @@ impl SdfSceneDelta {
     }
 
     /// Create a full scene replacement delta
+    #[must_use]
     pub fn full_replace(ref_version: u32, asdf_data: Vec<u8>) -> Self {
         Self {
             ref_scene_version: ref_version,
@@ -157,6 +167,7 @@ impl SdfSceneDelta {
     }
 
     /// Create an SVO chunk delta (from edge device 3D scanner)
+    #[must_use]
     pub fn svo_chunk_delta(ref_version: u32, chunk_data: Vec<u8>) -> Self {
         Self {
             ref_scene_version: ref_version,
@@ -167,6 +178,7 @@ impl SdfSceneDelta {
     }
 
     /// Get delta payload size in bytes
+    #[must_use]
     pub fn delta_size(&self) -> usize {
         self.delta_data.len()
     }
@@ -181,7 +193,7 @@ pub struct PersonMask {
     /// Bounding box of the person region [x, y, width, height]
     pub bbox: [u32; 4],
     /// RLE-compressed binary mask within the bounding box
-    /// Format: [run_length: u16, value: u8 (0 or 1)]...
+    /// Format: [`run_length`: u16, value: u8 (0 or 1)]...
     pub rle_mask: Vec<u8>,
     /// Mask confidence (0.0 - 1.0)
     pub confidence: f32,
@@ -193,6 +205,7 @@ pub struct PersonMask {
 
 impl PersonMask {
     /// Create a new person mask
+    #[must_use]
     pub fn new(bbox: [u32; 4], rle_mask: Vec<u8>) -> Self {
         Self {
             bbox,
@@ -204,6 +217,7 @@ impl PersonMask {
     }
 
     /// Foreground coverage ratio (0.0 - 1.0)
+    #[must_use]
     pub fn coverage(&self) -> f32 {
         if self.total_pixels == 0 {
             return 0.0;
@@ -214,6 +228,7 @@ impl PersonMask {
     /// Estimated bandwidth savings vs. full-frame encoding
     ///
     /// Returns a ratio: 1.0 = no savings, 0.2 = 80% savings
+    #[must_use]
     pub fn bandwidth_ratio(&self, frame_width: u32, frame_height: u32) -> f32 {
         let frame_pixels = frame_width as f64 * frame_height as f64;
         if frame_pixels == 0.0 {
@@ -223,6 +238,7 @@ impl PersonMask {
     }
 
     /// RLE mask size in bytes
+    #[must_use]
     pub fn mask_size(&self) -> usize {
         self.rle_mask.len()
     }
@@ -230,11 +246,12 @@ impl PersonMask {
 
 /// Encode a binary mask (1 = foreground, 0 = background) to RLE — optimized.
 ///
-/// RLE format: pairs of (run_length_u16_le, value_u8)
+/// RLE format: pairs of (`run_length_u16_le`, `value_u8`)
 /// Each pair = 3 bytes. Typical person mask: 200-500 bytes.
 ///
 /// Optimization: scan-forward loop finds run boundaries in bulk
 /// (compiler auto-vectorizes the inner equality scan).
+#[must_use]
 pub fn rle_encode_mask(mask: &[u8], width: u32, height: u32) -> Vec<u8> {
     let total = (width * height) as usize;
     if total == 0 || mask.is_empty() {
@@ -264,6 +281,7 @@ pub fn rle_encode_mask(mask: &[u8], width: u32, height: u32) -> Vec<u8> {
 ///
 /// Pre-allocates zero-filled buffer, only fills non-zero runs.
 /// Since masks are mostly background (0), this skips ~70-80% of writes.
+#[must_use]
 pub fn rle_decode_mask(rle: &[u8], width: u32, height: u32) -> Vec<u8> {
     let total = (width * height) as usize;
     // Pre-allocate as zeros (memset, SIMD-optimized by allocator)
@@ -315,8 +333,9 @@ pub struct HybridBandwidthStats {
 impl HybridBandwidthStats {
     /// Calculate bandwidth savings ratio
     ///
-    /// Returns: (savings_percent, compression_ratio)
+    /// Returns: (`savings_percent`, `compression_ratio`)
     /// Example: (92.5, 13.3) means 92.5% savings, 13.3x compression
+    #[must_use]
     pub fn savings(&self) -> (f64, f64) {
         if self.traditional_total_bytes == 0 {
             return (0.0, 1.0);
@@ -328,6 +347,7 @@ impl HybridBandwidthStats {
     }
 
     /// Format as human-readable report
+    #[must_use]
     pub fn report(&self) -> String {
         let (savings, ratio) = self.savings();
         format!(

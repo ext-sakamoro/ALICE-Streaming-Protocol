@@ -14,6 +14,7 @@ pub struct PhysicsSnapshot {
 
 impl PhysicsSnapshot {
     /// Capture current body positions from a physics world.
+    #[must_use]
     pub fn capture(world: &PhysicsWorld) -> Self {
         let positions = world
             .bodies
@@ -27,6 +28,7 @@ impl PhysicsSnapshot {
     }
 
     /// Number of bodies in this snapshot.
+    #[must_use]
     pub fn body_count(&self) -> usize {
         self.positions.len()
     }
@@ -86,6 +88,7 @@ impl PhysicsSnapshot {
 /// Used on the receiver side to reconstruct physics state from streamed packets.
 ///
 /// Returns a list of (body_index, delta_x, delta_y) tuples.
+#[must_use]
 pub fn d_packet_to_body_deltas(
     motion_vectors: &[MotionVector],
     grid_width: u16,

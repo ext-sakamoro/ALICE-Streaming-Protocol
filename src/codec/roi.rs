@@ -21,6 +21,7 @@ pub struct RoiRegion {
 
 impl RoiRegion {
     /// Create a new ROI region with default confidence and priority
+    #[must_use]
     pub fn new(bounds: Rect, roi_type: RoiType) -> Self {
         Self {
             bounds,
@@ -31,12 +32,14 @@ impl RoiRegion {
     }
 
     /// Set the confidence score (clamped to 0.0-1.0)
+    #[must_use]
     pub fn with_confidence(mut self, confidence: f32) -> Self {
         self.confidence = confidence.clamp(0.0, 1.0);
         self
     }
 
     /// Set the priority level
+    #[must_use]
     pub fn with_priority(mut self, priority: u8) -> Self {
         self.priority = priority;
         self
@@ -93,11 +96,13 @@ impl Default for RoiDetector {
 
 impl RoiDetector {
     /// Create a new ROI detector with the given configuration
+    #[must_use]
     pub fn new(config: RoiConfig) -> Self {
         Self { config }
     }
 
     /// Detect ROIs in a grayscale frame
+    #[must_use]
     pub fn detect(&self, current: &[u8], width: usize, height: usize) -> Vec<RoiRegion> {
         let mut regions = Vec::new();
 
@@ -118,6 +123,7 @@ impl RoiDetector {
     }
 
     /// Detect ROIs with motion information
+    #[must_use]
     pub fn detect_with_motion(
         &self,
         current: &[u8],
@@ -254,6 +260,7 @@ impl RoiDetector {
 }
 
 /// Detect ROIs (convenience function)
+#[must_use]
 pub fn detect_rois(
     current: &[u8],
     previous: Option<&[u8]>,
@@ -296,7 +303,6 @@ fn calculate_edge_strength(
 
             // Simplified Sobel gradient (horizontal and vertical)
             let idx = y * width + x;
-            let _center = frame[idx] as i32;
 
             let left = frame[idx - 1] as i32;
             let right = frame[idx + 1] as i32;
@@ -459,6 +465,7 @@ mod tests {
         vec![value; width * height]
     }
 
+    #[allow(dead_code)]
     fn create_edge_frame(width: usize, height: usize) -> Vec<u8> {
         let mut frame = vec![0u8; width * height];
         // Create a vertical edge in the middle

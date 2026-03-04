@@ -25,6 +25,7 @@ impl Default for DctTransform {
 
 impl DctTransform {
     /// Create new DCT transform with specified block size
+    #[must_use]
     pub fn new(block_size: usize) -> Self {
         Self {
             block_size,
@@ -34,6 +35,7 @@ impl DctTransform {
     }
 
     /// Set quantization quality (1-100)
+    #[must_use]
     pub fn with_quality(mut self, quality: u8) -> Self {
         let quality = quality.clamp(1, 100) as f64;
         let scale = if quality < 50.0 {
@@ -49,17 +51,20 @@ impl DctTransform {
     }
 
     /// Forward DCT on a block
+    #[must_use]
     pub fn forward(&self, block: &[f64]) -> Vec<f64> {
         dct2d(block, self.block_size)
     }
 
     /// Inverse DCT on a block
+    #[must_use]
     pub fn inverse(&self, coefficients: &[f64]) -> Vec<f64> {
         idct2d(coefficients, self.block_size)
     }
 
     /// Quantize DCT coefficients
     #[inline(always)]
+    #[must_use]
     pub fn quantize(&self, coefficients: &[f64]) -> Vec<i32> {
         let inv_quant: Vec<f64> = self.quant_matrix.iter().map(|&q| 1.0 / q).collect();
         coefficients
@@ -70,6 +75,7 @@ impl DctTransform {
     }
 
     /// Dequantize coefficients
+    #[must_use]
     pub fn dequantize(&self, quantized: &[i32]) -> Vec<f64> {
         quantized
             .iter()
@@ -79,6 +85,7 @@ impl DctTransform {
     }
 
     /// Encode to sparse representation
+    #[must_use]
     pub fn encode_sparse(&self, block: &[f64]) -> Vec<(u32, u32, f32)> {
         let coefficients = self.forward(block);
         let quantized = self.quantize(&coefficients);
@@ -86,6 +93,7 @@ impl DctTransform {
     }
 
     /// Decode from sparse representation
+    #[must_use]
     pub fn decode_sparse(&self, sparse: &[(u32, u32, f32)], default_value: f64) -> Vec<f64> {
         let quantized = sparse_dct_decode(sparse, self.block_size, default_value as i32);
         let dequantized = self.dequantize(&quantized);
@@ -117,6 +125,7 @@ fn default_quantization_matrix(size: usize) -> Vec<f64> {
 }
 
 /// 2D Discrete Cosine Transform
+#[must_use]
 pub fn dct2d(input: &[f64], size: usize) -> Vec<f64> {
     let mut output = vec![0.0; size * size];
     let scale = 2.0 / size as f64;
@@ -143,6 +152,7 @@ pub fn dct2d(input: &[f64], size: usize) -> Vec<f64> {
 }
 
 /// 2D Inverse Discrete Cosine Transform
+#[must_use]
 pub fn idct2d(input: &[f64], size: usize) -> Vec<f64> {
     let mut output = vec![0.0; size * size];
     let scale = 2.0 / size as f64;
@@ -173,6 +183,7 @@ pub fn idct2d(input: &[f64], size: usize) -> Vec<f64> {
 /// Encode DCT coefficients to sparse representation
 ///
 /// Returns only non-zero coefficients as (u, v, value) tuples
+#[must_use]
 pub fn sparse_dct_encode(
     coefficients: &[i32],
     size: usize,
@@ -193,6 +204,7 @@ pub fn sparse_dct_encode(
 }
 
 /// Decode sparse representation back to full coefficient matrix
+#[must_use]
 pub fn sparse_dct_decode(sparse: &[(u32, u32, f32)], size: usize, default: i32) -> Vec<i32> {
     let mut coefficients = vec![default; size * size];
 
@@ -207,16 +219,19 @@ pub fn sparse_dct_decode(sparse: &[(u32, u32, f32)], size: usize, default: i32) 
 }
 
 /// Process multiple blocks in parallel
+#[must_use]
 pub fn dct2d_parallel(blocks: &[Vec<f64>], size: usize) -> Vec<Vec<f64>> {
     blocks.par_iter().map(|block| dct2d(block, size)).collect()
 }
 
 /// Process multiple blocks inverse in parallel
+#[must_use]
 pub fn idct2d_parallel(blocks: &[Vec<f64>], size: usize) -> Vec<Vec<f64>> {
     blocks.par_iter().map(|block| idct2d(block, size)).collect()
 }
 
 /// Calculate energy compaction ratio (for quality measurement)
+#[must_use]
 pub fn energy_compaction(original: &[f64], reconstructed: &[f64]) -> f64 {
     if original.len() != reconstructed.len() || original.is_empty() {
         return 0.0;

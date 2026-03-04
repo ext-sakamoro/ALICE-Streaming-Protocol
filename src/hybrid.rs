@@ -81,6 +81,7 @@ pub struct HybridTransmitter {
 
 impl HybridTransmitter {
     /// Create a new hybrid transmitter
+    #[must_use]
     pub fn new() -> Self {
         Self {
             sequence: 0,
@@ -97,7 +98,7 @@ impl HybridTransmitter {
         &mut self,
         width: u32,
         height: u32,
-        _fps: f32,
+        fps: f32,
         sdf_scene: SdfSceneDescriptor,
         person_mask: Option<PersonMask>,
         person_video: Vec<u8>,
@@ -105,7 +106,7 @@ impl HybridTransmitter {
         self.create_keyframe_av(
             width,
             height,
-            _fps,
+            fps,
             sdf_scene,
             person_mask,
             person_video,
@@ -121,7 +122,7 @@ impl HybridTransmitter {
         &mut self,
         width: u32,
         height: u32,
-        _fps: f32,
+        _fps: f32, // fps is reserved for future frame-rate adaptation
         sdf_scene: SdfSceneDescriptor,
         person_mask: Option<PersonMask>,
         person_video: Vec<u8>,
@@ -142,7 +143,9 @@ impl HybridTransmitter {
         self.stats.frame_count += 1;
 
         let hybrid_size = sdf_scene.asdf_size()
-            + person_mask.as_ref().map_or(0, |m| m.mask_size())
+            + person_mask
+                .as_ref()
+                .map_or(0, super::scene::PersonMask::mask_size)
             + person_video.len()
             + audio_data.len();
         self.stats.hybrid_total_bytes += hybrid_size;
@@ -207,8 +210,12 @@ impl HybridTransmitter {
         self.stats.audio_bytes += audio_data.len();
         self.stats.frame_count += 1;
 
-        let hybrid_size = sdf_delta.as_ref().map_or(0, |d| d.delta_size())
-            + person_mask.as_ref().map_or(0, |m| m.mask_size())
+        let hybrid_size = sdf_delta
+            .as_ref()
+            .map_or(0, super::scene::SdfSceneDelta::delta_size)
+            + person_mask
+                .as_ref()
+                .map_or(0, super::scene::PersonMask::mask_size)
             + person_video.len()
             + audio_data.len();
         self.stats.hybrid_total_bytes += hybrid_size;
@@ -230,16 +237,19 @@ impl HybridTransmitter {
     }
 
     /// Get current bandwidth statistics
+    #[must_use]
     pub fn stats(&self) -> &HybridBandwidthStats {
         &self.stats
     }
 
     /// Get current sequence number
+    #[must_use]
     pub fn sequence(&self) -> u32 {
         self.sequence
     }
 
     /// Get current scene version
+    #[must_use]
     pub fn scene_version(&self) -> u32 {
         self.scene_version
     }
@@ -269,6 +279,7 @@ pub struct HybridReceiver {
 
 impl HybridReceiver {
     /// Create a new hybrid receiver
+    #[must_use]
     pub fn new() -> Self {
         Self {
             current_scene: None,
@@ -310,16 +321,19 @@ impl HybridReceiver {
     }
 
     /// Get the current SDF scene (for rendering)
+    #[must_use]
     pub fn current_scene(&self) -> Option<&SdfSceneDescriptor> {
         self.current_scene.as_ref()
     }
 
     /// Get the current person mask
+    #[must_use]
     pub fn current_mask(&self) -> Option<&PersonMask> {
         self.current_mask.as_ref()
     }
 
     /// Frames received so far
+    #[must_use]
     pub fn frames_received(&self) -> u32 {
         self.frames_received
     }
@@ -351,7 +365,8 @@ pub struct CompositeInstruction {
 /// Create a person mask from segmentation data for hybrid streaming.
 ///
 /// Convenience function that bridges ALICE-Codec segmentation with
-/// ALICE-Streaming-Protocol's PersonMask format.
+/// ALICE-Streaming-Protocol's `PersonMask` format.
+#[must_use]
 pub fn create_person_mask(
     binary_mask: &[u8],
     width: u32,
@@ -377,6 +392,7 @@ pub fn create_person_mask(
 /// * `person_coverage` - Ratio of person pixels (0.0-1.0, typical: 0.15-0.30)
 /// * `sdf_scene_bytes` - SDF scene size in bytes
 /// * `wavelet_bpp` - Wavelet bits per pixel (typical: 0.5-2.0)
+#[must_use]
 pub fn estimate_savings(
     frame_width: u32,
     frame_height: u32,

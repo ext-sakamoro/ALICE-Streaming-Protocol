@@ -16,7 +16,7 @@
 //!
 //! # Example
 //!
-//! ```rust,ignore
+//! ```rust,no_run
 //! use libasp::flatbuffers_api::{DPacketBuilder, read_d_packet};
 //! use libasp::MotionVector;
 //!
@@ -70,7 +70,7 @@ pub use generated::{
     SyncCommand as FbSyncCommand,
 };
 
-/// Error type for FlatBuffers operations
+/// Error type for `FlatBuffers` operations
 #[derive(Debug, Clone, thiserror::Error)]
 pub enum FlatBuffersError {
     /// Invalid buffer format
@@ -91,45 +91,51 @@ pub enum FlatBuffersError {
     },
 }
 
-/// Result type for FlatBuffers operations
+/// Result type for `FlatBuffers` operations
 pub type FbResult<T> = Result<T, FlatBuffersError>;
 
 // =============================================================================
 // Type Conversions
 // =============================================================================
 
-/// Convert Rust MotionVector to FlatBuffers MotionVector
+/// Convert Rust `MotionVector` to `FlatBuffers` `MotionVector`
 #[inline]
+#[must_use]
 pub fn motion_vector_to_fb(mv: &RustMotionVector) -> FbMotionVector {
     FbMotionVector::new(mv.block_x, mv.block_y, mv.dx, mv.dy, mv.sad)
 }
 
-/// Convert FlatBuffers MotionVector to Rust MotionVector
+/// Convert `FlatBuffers` `MotionVector` to Rust `MotionVector`
 #[inline]
+#[must_use]
 pub fn motion_vector_from_fb(mv: &FbMotionVector) -> RustMotionVector {
     RustMotionVector::new(mv.block_x(), mv.block_y(), mv.dx(), mv.dy(), mv.sad())
 }
 
-/// Convert Rust Color to FlatBuffers Color
+/// Convert Rust Color to `FlatBuffers` Color
 #[inline]
+#[must_use]
 pub fn color_to_fb(c: &RustColor) -> FbColor {
     FbColor::new(c.r, c.g, c.b)
 }
 
-/// Convert FlatBuffers Color to Rust Color
+/// Convert `FlatBuffers` Color to Rust Color
 #[inline]
+#[must_use]
 pub fn color_from_fb(c: &FbColor) -> RustColor {
     RustColor::new(c.r(), c.g(), c.b())
 }
 
-/// Convert Rust Rect to FlatBuffers Rect
+/// Convert Rust Rect to `FlatBuffers` Rect
 #[inline]
+#[must_use]
 pub fn rect_to_fb(r: &RustRect) -> FbRect {
     FbRect::new(r.x, r.y, r.width, r.height)
 }
 
-/// Convert FlatBuffers Rect to Rust Rect
+/// Convert `FlatBuffers` Rect to Rust Rect
 #[inline]
+#[must_use]
 pub fn rect_from_fb(r: &FbRect) -> RustRect {
     RustRect::new(r.x(), r.y(), r.width(), r.height())
 }
@@ -145,7 +151,7 @@ pub fn rect_from_fb(r: &FbRect) -> RustRect {
 ///
 /// # Example
 ///
-/// ```rust,ignore
+/// ```rust,no_run
 /// let bytes = DPacketBuilder::new(1)
 ///     .motion_vectors(&mvs)
 ///     .timestamp_ms(12345)
@@ -159,8 +165,9 @@ pub struct DPacketBuilder<'a> {
     timestamp_ms: u64,
 }
 
-impl<'a> DPacketBuilder<'a> {
+impl DPacketBuilder<'_> {
     /// Create a new D-Packet builder
+    #[must_use]
     pub fn new(ref_sequence: u32) -> Self {
         Self {
             builder: FlatBufferBuilder::with_capacity(1024),
@@ -172,6 +179,7 @@ impl<'a> DPacketBuilder<'a> {
     }
 
     /// Create with pre-allocated capacity
+    #[must_use]
     pub fn with_capacity(ref_sequence: u32, capacity: usize) -> Self {
         Self {
             builder: FlatBufferBuilder::with_capacity(capacity),
@@ -183,6 +191,7 @@ impl<'a> DPacketBuilder<'a> {
     }
 
     /// Add motion vectors (full format, 12 bytes each)
+    #[must_use]
     pub fn motion_vectors(mut self, mvs: &[RustMotionVector]) -> Self {
         self.motion_vectors = Some(mvs.iter().map(motion_vector_to_fb).collect());
         self
@@ -192,6 +201,7 @@ impl<'a> DPacketBuilder<'a> {
     ///
     /// Use this for bandwidth-critical scenarios where block position
     /// is implicit from array index.
+    #[must_use]
     pub fn compact_vectors(mut self, mvs: &[(i8, i8)]) -> Self {
         self.compact_vectors = Some(
             mvs.iter()
@@ -202,12 +212,14 @@ impl<'a> DPacketBuilder<'a> {
     }
 
     /// Set timestamp in milliseconds
+    #[must_use]
     pub fn timestamp_ms(mut self, ts: u64) -> Self {
         self.timestamp_ms = ts;
         self
     }
 
     /// Build the packet and return serialized bytes
+    #[must_use]
     pub fn build(mut self) -> Vec<u8> {
         // Create motion vectors vector
         let mvs_offset = self
@@ -249,6 +261,10 @@ impl<'a> DPacketBuilder<'a> {
     /// Build directly into an existing buffer (zero-allocation)
     ///
     /// Returns the number of bytes written, or an error if the buffer is too small.
+    ///
+    /// # Errors
+    ///
+    /// Returns `FlatBuffersError::BufferTooSmall` if `buffer` is smaller than the serialized data.
     pub fn build_into(mut self, buffer: &mut [u8]) -> FbResult<usize> {
         // Create motion vectors vector
         let mvs_offset = self
@@ -312,8 +328,9 @@ pub struct IPacketBuilder<'a> {
     timestamp_ms: u64,
 }
 
-impl<'a> IPacketBuilder<'a> {
+impl IPacketBuilder<'_> {
     /// Create a new I-Packet builder
+    #[must_use]
     pub fn new(width: u32, height: u32, fps: f32) -> Self {
         Self {
             builder: FlatBufferBuilder::with_capacity(4096),
@@ -326,18 +343,21 @@ impl<'a> IPacketBuilder<'a> {
     }
 
     /// Set quality level
+    #[must_use]
     pub fn quality(mut self, q: FbQualityLevel) -> Self {
         self.quality = q;
         self
     }
 
     /// Set timestamp in milliseconds
+    #[must_use]
     pub fn timestamp_ms(mut self, ts: u64) -> Self {
         self.timestamp_ms = ts;
         self
     }
 
     /// Build the packet and return serialized bytes
+    #[must_use]
     pub fn build(mut self) -> Vec<u8> {
         // Build IPacketPayload
         let i_packet = generated::IPacketPayload::create(
@@ -379,8 +399,9 @@ pub struct SPacketBuilder<'a> {
     timestamp_ms: u64,
 }
 
-impl<'a> SPacketBuilder<'a> {
+impl SPacketBuilder<'_> {
     /// Create a new S-Packet builder
+    #[must_use]
     pub fn new(command: FbSyncCommand) -> Self {
         Self {
             builder: FlatBufferBuilder::with_capacity(128),
@@ -390,32 +411,38 @@ impl<'a> SPacketBuilder<'a> {
     }
 
     /// Create a Ping packet
+    #[must_use]
     pub fn ping() -> Self {
         Self::new(FbSyncCommand::Ping)
     }
 
     /// Create a Pong packet
+    #[must_use]
     pub fn pong() -> Self {
         Self::new(FbSyncCommand::Pong)
     }
 
-    /// Create a RequestKeyframe packet
+    /// Create a `RequestKeyframe` packet
+    #[must_use]
     pub fn request_keyframe() -> Self {
         Self::new(FbSyncCommand::RequestKeyframe)
     }
 
-    /// Create an EndOfStream packet
+    /// Create an `EndOfStream` packet
+    #[must_use]
     pub fn end_of_stream() -> Self {
         Self::new(FbSyncCommand::EndOfStream)
     }
 
     /// Set timestamp in milliseconds
+    #[must_use]
     pub fn timestamp_ms(mut self, ts: u64) -> Self {
         self.timestamp_ms = ts;
         self
     }
 
     /// Build the packet and return serialized bytes
+    #[must_use]
     pub fn build(mut self) -> Vec<u8> {
         // Build SPacketPayload
         let s_packet = generated::SPacketPayload::create(
@@ -446,9 +473,13 @@ impl<'a> SPacketBuilder<'a> {
 // Packet Readers (Zero-Copy Access)
 // =============================================================================
 
-/// Read and verify a FlatBuffers packet
+/// Read and verify a `FlatBuffers` packet
 ///
-/// Returns the root AspPacketPayload table for zero-copy access.
+/// Returns the root `AspPacketPayload` table for zero-copy access.
+///
+/// # Errors
+///
+/// Returns `FlatBuffersError::InvalidFormat` if the buffer is too small or contains invalid data.
 pub fn read_packet(bytes: &[u8]) -> FbResult<AspPacketPayload<'_>> {
     // Verify file identifier
     if bytes.len() < 8 {
@@ -468,13 +499,18 @@ pub fn read_packet(bytes: &[u8]) -> FbResult<AspPacketPayload<'_>> {
 ///
 /// # Example
 ///
-/// ```rust,ignore
+/// ```rust,no_run
 /// let d_packet = read_d_packet(&bytes)?;
 /// let mvs = d_packet.motion_vectors().unwrap();
 /// for mv in mvs.iter() {
 ///     println!("dx={}, dy={}", mv.dx(), mv.dy());
 /// }
 /// ```
+///
+/// # Errors
+///
+/// Returns `FlatBuffersError::InvalidFormat` if bytes are invalid, or `FlatBuffersError::MissingField`
+/// if the payload type does not match `DPacketPayload`.
 pub fn read_d_packet(bytes: &[u8]) -> FbResult<DPacketPayload<'_>> {
     let packet = read_packet(bytes)?;
 
@@ -491,6 +527,11 @@ pub fn read_d_packet(bytes: &[u8]) -> FbResult<DPacketPayload<'_>> {
 }
 
 /// Read an I-Packet from bytes (zero-copy)
+///
+/// # Errors
+///
+/// Returns `FlatBuffersError::InvalidFormat` if bytes are invalid, or `FlatBuffersError::MissingField`
+/// if the payload type does not match `IPacketPayload`.
 pub fn read_i_packet(bytes: &[u8]) -> FbResult<IPacketPayload<'_>> {
     let packet = read_packet(bytes)?;
 
@@ -507,6 +548,11 @@ pub fn read_i_packet(bytes: &[u8]) -> FbResult<IPacketPayload<'_>> {
 }
 
 /// Read an S-Packet from bytes (zero-copy)
+///
+/// # Errors
+///
+/// Returns `FlatBuffersError::InvalidFormat` if bytes are invalid, or `FlatBuffersError::MissingField`
+/// if the payload type does not match `SPacketPayload`.
 pub fn read_s_packet(bytes: &[u8]) -> FbResult<SPacketPayload<'_>> {
     let packet = read_packet(bytes)?;
 
@@ -523,6 +569,10 @@ pub fn read_s_packet(bytes: &[u8]) -> FbResult<SPacketPayload<'_>> {
 }
 
 /// Get packet type without full parsing
+///
+/// # Errors
+///
+/// Returns `FlatBuffersError::InvalidFormat` if the bytes cannot be parsed.
 pub fn get_packet_type(bytes: &[u8]) -> FbResult<generated::AspPayloadUnion> {
     let packet = read_packet(bytes)?;
     Ok(packet.payload_type())
@@ -533,6 +583,7 @@ pub fn get_packet_type(bytes: &[u8]) -> FbResult<generated::AspPayloadUnion> {
 // =============================================================================
 
 /// Create a D-Packet with motion vectors (convenience function)
+#[must_use]
 pub fn create_d_packet(ref_sequence: u32, mvs: &[RustMotionVector], timestamp_ms: u64) -> Vec<u8> {
     DPacketBuilder::new(ref_sequence)
         .motion_vectors(mvs)
@@ -541,6 +592,7 @@ pub fn create_d_packet(ref_sequence: u32, mvs: &[RustMotionVector], timestamp_ms
 }
 
 /// Create an I-Packet (convenience function)
+#[must_use]
 pub fn create_i_packet(width: u32, height: u32, fps: f32, timestamp_ms: u64) -> Vec<u8> {
     IPacketBuilder::new(width, height, fps)
         .timestamp_ms(timestamp_ms)
@@ -548,11 +600,13 @@ pub fn create_i_packet(width: u32, height: u32, fps: f32, timestamp_ms: u64) -> 
 }
 
 /// Create a Ping packet (convenience function)
+#[must_use]
 pub fn create_ping(timestamp_ms: u64) -> Vec<u8> {
     SPacketBuilder::ping().timestamp_ms(timestamp_ms).build()
 }
 
 /// Create a Pong packet (convenience function)
+#[must_use]
 pub fn create_pong(timestamp_ms: u64) -> Vec<u8> {
     SPacketBuilder::pong().timestamp_ms(timestamp_ms).build()
 }
@@ -561,18 +615,18 @@ pub fn create_pong(timestamp_ms: u64) -> Vec<u8> {
 // Builder Reuse API (Zero-Allocation Hot Loop)
 // =============================================================================
 
-/// Encode a D-Packet reusing an existing FlatBufferBuilder
+/// Encode a D-Packet reusing an existing `FlatBufferBuilder`
 ///
 /// This function is designed for hot loops where you want to avoid
 /// per-frame allocations. The builder is reset at the start of each call.
 ///
 /// # Optimization
 /// - Uses `start_vector` + `push` pattern (no intermediate Vec allocation)
-/// - FlatBuffers builds vectors backwards, so we iterate in reverse
+/// - `FlatBuffers` builds vectors backwards, so we iterate in reverse
 ///
 /// # Example
 ///
-/// ```rust,ignore
+/// ```rust,no_run
 /// use flatbuffers::FlatBufferBuilder;
 /// use libasp::flatbuffers_api::encode_d_packet_with_builder;
 ///
@@ -684,7 +738,7 @@ pub fn encode_d_packet_compact_with_builder<'a>(
     builder.finished_data()
 }
 
-/// Encode an I-Packet reusing an existing FlatBufferBuilder
+/// Encode an I-Packet reusing an existing `FlatBufferBuilder`
 #[inline]
 pub fn encode_i_packet_with_builder<'a>(
     builder: &'a mut FlatBufferBuilder<'static>,
@@ -724,7 +778,7 @@ pub fn encode_i_packet_with_builder<'a>(
     builder.finished_data()
 }
 
-/// Encode an S-Packet reusing an existing FlatBufferBuilder
+/// Encode an S-Packet reusing an existing `FlatBufferBuilder`
 #[inline]
 pub fn encode_s_packet_with_builder<'a>(
     builder: &'a mut FlatBufferBuilder<'static>,

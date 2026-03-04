@@ -32,6 +32,7 @@ impl Default for ColorExtractor {
 
 impl ColorExtractor {
     /// Create a new color extractor for the given number of colors
+    #[must_use]
     pub fn new(num_colors: usize) -> Self {
         Self {
             num_colors,
@@ -40,18 +41,21 @@ impl ColorExtractor {
     }
 
     /// Set maximum k-means iterations
+    #[must_use]
     pub fn with_iterations(mut self, iterations: usize) -> Self {
         self.max_iterations = iterations;
         self
     }
 
     /// Set pixel sampling rate (0.01-1.0)
+    #[must_use]
     pub fn with_sampling_rate(mut self, rate: f64) -> Self {
         self.sampling_rate = rate.clamp(0.01, 1.0);
         self
     }
 
     /// Extract dominant colors from RGB image data
+    #[must_use]
     pub fn extract(&self, pixels: &[u8]) -> Vec<Color> {
         extract_dominant_colors(
             pixels,
@@ -62,6 +66,7 @@ impl ColorExtractor {
     }
 
     /// Extract with weights (how many pixels are closest to each color)
+    #[must_use]
     pub fn extract_with_weights(&self, pixels: &[u8]) -> (Vec<Color>, Vec<f32>) {
         kmeans_palette(
             pixels,
@@ -82,6 +87,7 @@ impl ColorExtractor {
 ///
 /// # Returns
 /// Vector of dominant colors sorted by frequency
+#[must_use]
 pub fn extract_dominant_colors(
     pixels: &[u8],
     k: usize,
@@ -93,6 +99,7 @@ pub fn extract_dominant_colors(
 }
 
 /// K-means color palette extraction with weights
+#[must_use]
 pub fn kmeans_palette(
     pixels: &[u8],
     k: usize,
@@ -202,8 +209,7 @@ fn kmeans_pp_init(pixels: &[[u8; 3]], k: usize) -> Vec<Color> {
             .iter()
             .enumerate()
             .max_by(|(_, a), (_, b)| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal))
-            .map(|(i, _)| i)
-            .unwrap_or(0);
+            .map_or(0, |(i, _)| i);
 
         centroids.push(Color::from_array(pixels[max_idx]));
     }
@@ -224,8 +230,7 @@ fn assign_to_centroids(pixels: &[[u8; 3]], centroids: &[Color], assignments: &mu
                         .partial_cmp(&color_distance_sq(p, b))
                         .unwrap_or(std::cmp::Ordering::Equal)
                 })
-                .map(|(i, _)| i)
-                .unwrap_or(0)
+                .map_or(0, |(i, _)| i)
         })
         .collect();
 
@@ -282,6 +287,7 @@ fn color_distance_sq(pixel: &[u8; 3], color: &Color) -> f64 {
 }
 
 /// Reduce color palette using median cut algorithm (alternative to k-means)
+#[must_use]
 pub fn median_cut_palette(pixels: &[u8], num_colors: usize) -> Vec<Color> {
     if pixels.len() < 3 || num_colors == 0 {
         return vec![Color::black()];
@@ -297,6 +303,7 @@ pub fn median_cut_palette(pixels: &[u8], num_colors: usize) -> Vec<Color> {
     }
 
     // Recursively split color space
+    #[allow(clippy::items_after_statements)]
     fn median_cut(colors: &mut [[u8; 3]], depth: usize, max_depth: usize, result: &mut Vec<Color>) {
         if colors.is_empty() {
             return;

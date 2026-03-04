@@ -339,31 +339,37 @@ pub struct Color {
 
 impl Color {
     /// Create a new color from RGB components
+    #[must_use]
     pub const fn new(r: u8, g: u8, b: u8) -> Self {
         Self { r, g, b }
     }
 
     /// Create black color (0, 0, 0)
+    #[must_use]
     pub const fn black() -> Self {
         Self::new(0, 0, 0)
     }
 
     /// Create white color (255, 255, 255)
+    #[must_use]
     pub const fn white() -> Self {
         Self::new(255, 255, 255)
     }
 
     /// Convert to RGB array
+    #[must_use]
     pub fn to_array(self) -> [u8; 3] {
         [self.r, self.g, self.b]
     }
 
     /// Create from RGB array
+    #[must_use]
     pub fn from_array(arr: [u8; 3]) -> Self {
         Self::new(arr[0], arr[1], arr[2])
     }
 
     /// Calculate luminance (Y component in YUV)
+    #[must_use]
     pub fn luminance(self) -> f32 {
         0.299 * self.r as f32 + 0.587 * self.g as f32 + 0.114 * self.b as f32
     }
@@ -380,11 +386,13 @@ pub struct Point {
 
 impl Point {
     /// Create a new point
+    #[must_use]
     pub const fn new(x: i32, y: i32) -> Self {
         Self { x, y }
     }
 
     /// Create the origin point (0, 0)
+    #[must_use]
     pub const fn origin() -> Self {
         Self::new(0, 0)
     }
@@ -405,6 +413,7 @@ pub struct Rect {
 
 impl Rect {
     /// Create a new rectangle
+    #[must_use]
     pub const fn new(x: u32, y: u32, width: u32, height: u32) -> Self {
         Self {
             x,
@@ -415,16 +424,19 @@ impl Rect {
     }
 
     /// Calculate area in pixels
+    #[must_use]
     pub fn area(&self) -> u64 {
         self.width as u64 * self.height as u64
     }
 
     /// Check if a point is inside the rectangle
+    #[must_use]
     pub fn contains(&self, x: u32, y: u32) -> bool {
         x >= self.x && x < self.x + self.width && y >= self.y && y < self.y + self.height
     }
 
     /// Check if this rectangle intersects with another
+    #[must_use]
     pub fn intersects(&self, other: &Rect) -> bool {
         self.x < other.x + other.width
             && self.x + self.width > other.x
@@ -435,7 +447,7 @@ impl Rect {
 
 /// Motion vector (16 bytes, cache-line optimized)
 ///
-/// Layout: [block_x: u16, block_y: u16, dx: i16, dy: i16, sad: u32, _pad: u32]
+/// Layout: [`block_x`: u16, `block_y`: u16, dx: i16, dy: i16, sad: u32, _pad: u32]
 /// For 4K video (3840x2160), 16x16 blocks = 240x135 = 32,400 blocks
 /// u16 range (0-65535) is sufficient for block indices.
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize, Default)]
@@ -453,12 +465,13 @@ pub struct MotionVector {
     pub sad: u32,
     /// Padding for 16-byte alignment (reserved for future use)
     #[serde(skip)]
-    pub _reserved: u32,
+    pub reserved: u32,
 }
 
 impl MotionVector {
     /// Create a new motion vector
     #[inline]
+    #[must_use]
     pub const fn new(block_x: u16, block_y: u16, dx: i16, dy: i16, sad: u32) -> Self {
         Self {
             block_x,
@@ -466,12 +479,13 @@ impl MotionVector {
             dx,
             dy,
             sad,
-            _reserved: 0,
+            reserved: 0,
         }
     }
 
     /// Create from u32 coordinates (with truncation for legacy compatibility)
     #[inline]
+    #[must_use]
     pub const fn from_u32(block_x: u32, block_y: u32, dx: i16, dy: i16, sad: u32) -> Self {
         Self {
             block_x: block_x as u16,
@@ -479,24 +493,27 @@ impl MotionVector {
             dx,
             dy,
             sad,
-            _reserved: 0,
+            reserved: 0,
         }
     }
 
     /// Check if this is a zero motion vector
     #[inline]
+    #[must_use]
     pub fn is_zero(&self) -> bool {
         self.dx == 0 && self.dy == 0
     }
 
     /// Calculate motion magnitude
     #[inline]
+    #[must_use]
     pub fn magnitude(&self) -> f32 {
         ((self.dx as f32).powi(2) + (self.dy as f32).powi(2)).sqrt()
     }
 
     /// Convert to compact format (for bandwidth optimization)
     #[inline]
+    #[must_use]
     pub fn to_compact(&self) -> Option<MotionVectorCompact> {
         // Only convert if dx/dy fit in i8 range
         if self.dx >= -128 && self.dx <= 127 && self.dy >= -128 && self.dy <= 127 {
@@ -512,7 +529,7 @@ impl MotionVector {
 
 /// Compact motion vector for bandwidth-efficient transmission
 ///
-/// Uses only 2 bytes (vs 16 bytes for full MotionVector).
+/// Uses only 2 bytes (vs 16 bytes for full `MotionVector`).
 /// Block position is implicit from array index.
 /// SAD is omitted as it's only needed during encoding.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
@@ -527,24 +544,28 @@ pub struct MotionVectorCompact {
 impl MotionVectorCompact {
     /// Create a new compact motion vector
     #[inline]
+    #[must_use]
     pub const fn new(dx: i8, dy: i8) -> Self {
         Self { dx, dy }
     }
 
     /// Create a zero motion vector (no displacement)
     #[inline]
+    #[must_use]
     pub const fn zero() -> Self {
         Self { dx: 0, dy: 0 }
     }
 
     /// Check if this is a zero motion vector
     #[inline]
+    #[must_use]
     pub fn is_zero(&self) -> bool {
         self.dx == 0 && self.dy == 0
     }
 
-    /// Expand to full MotionVector with block position and SAD
+    /// Expand to full `MotionVector` with block position and SAD
     #[inline]
+    #[must_use]
     pub fn expand(self, block_x: u16, block_y: u16, sad: u32) -> MotionVector {
         MotionVector {
             block_x,
@@ -552,7 +573,7 @@ impl MotionVectorCompact {
             dx: self.dx as i16,
             dy: self.dy as i16,
             sad,
-            _reserved: 0,
+            reserved: 0,
         }
     }
 }
@@ -635,6 +656,7 @@ pub struct StreamStats {
 
 impl StreamStats {
     /// Create new empty stream statistics
+    #[must_use]
     pub fn new() -> Self {
         Self::default()
     }

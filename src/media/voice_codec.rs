@@ -70,6 +70,7 @@ pub struct VoiceEncoder {
 
 impl VoiceEncoder {
     /// Create a new voice encoder
+    #[must_use]
     pub fn new(quality: VoiceQuality, layer_type: AudioLayerType) -> Self {
         let config = VoiceCodecConfig::for_quality(quality);
         let sample_rate = config.sample_rate;
@@ -82,6 +83,7 @@ impl VoiceEncoder {
     }
 
     /// Create with default settings (wideband, parametric)
+    #[must_use]
     pub fn default_config() -> Self {
         Self::new(VoiceQuality::Medium, AudioLayerType::Parametric)
     }
@@ -94,6 +96,10 @@ impl VoiceEncoder {
     ///
     /// # Returns
     /// AudioFrame ready for ASP transport
+    ///
+    /// # Errors
+    ///
+    /// Returns `Err` if the underlying codec encode fails.
     pub fn encode(&mut self, samples: &[f32], timestamp_ms: u64) -> Result<AudioFrame, String> {
         self.sequence += 1;
 
@@ -126,6 +132,10 @@ impl VoiceEncoder {
     }
 
     /// Convenience: encode and return raw bytes (for embedding in HybridFrame)
+    ///
+    /// # Errors
+    ///
+    /// Returns `Err` if the underlying codec encode fails.
     pub fn encode_to_bytes(
         &mut self,
         samples: &[f32],
@@ -136,6 +146,7 @@ impl VoiceEncoder {
     }
 
     /// Get current sequence number
+    #[must_use]
     pub fn sequence(&self) -> u32 {
         self.sequence
     }
@@ -198,6 +209,7 @@ impl VoiceEncoder {
     }
 
     /// Get configured sample rate
+    #[must_use]
     pub fn sample_rate(&self) -> u32 {
         self.sample_rate
     }
@@ -212,6 +224,7 @@ pub struct VoiceDecoder {
 
 impl VoiceDecoder {
     /// Create a new voice decoder
+    #[must_use]
     pub fn new(quality: VoiceQuality) -> Self {
         let config = VoiceCodecConfig::for_quality(quality);
         let sample_rate = config.sample_rate;
@@ -222,6 +235,7 @@ impl VoiceDecoder {
     }
 
     /// Create with default settings (wideband)
+    #[must_use]
     pub fn default_config() -> Self {
         Self::new(VoiceQuality::Medium)
     }
@@ -230,6 +244,10 @@ impl VoiceDecoder {
     ///
     /// # Returns
     /// f32 PCM samples (mono)
+    ///
+    /// # Errors
+    ///
+    /// Returns `Err` if deserialization or decoding fails.
     pub fn decode(&mut self, frame: &AudioFrame) -> Result<Vec<f32>, String> {
         match frame.layer_type {
             AudioLayerType::Parametric => {
@@ -244,18 +262,27 @@ impl VoiceDecoder {
     }
 
     /// Decode from raw bytes (counterpart to encode_to_bytes)
+    ///
+    /// # Errors
+    ///
+    /// Returns `Err` if deserialization or decoding fails.
     pub fn decode_from_bytes(&mut self, data: &[u8]) -> Result<Vec<f32>, String> {
         let frame = deserialize_audio_frame(data)?;
         self.decode(&frame)
     }
 
     /// Get configured sample rate
+    #[must_use]
     pub fn sample_rate(&self) -> u32 {
         self.sample_rate
     }
 }
 
 /// Quick encode: samples → serialized parametric params (no framing)
+///
+/// # Errors
+///
+/// Returns `Err` if voice encoding fails.
 pub fn encode_voice_parametric(samples: &[f32], sample_rate: u32) -> Result<Vec<u8>, String> {
     let params =
         voice_to_params(samples, sample_rate).map_err(|e| format!("Voice encode failed: {}", e))?;
@@ -263,6 +290,10 @@ pub fn encode_voice_parametric(samples: &[f32], sample_rate: u32) -> Result<Vec<
 }
 
 /// Quick decode: serialized parametric params → samples (no framing)
+///
+/// # Errors
+///
+/// Returns `Err` if deserialization fails.
 pub fn decode_voice_parametric(data: &[u8], sample_rate: u32) -> Result<Vec<f32>, String> {
     let params = deserialize_parametric_params(data)?;
     Ok(params_to_voice(&params, sample_rate))
