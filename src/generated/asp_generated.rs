@@ -5,7 +5,8 @@
     clippy::pub_underscore_fields,
     clippy::missing_panics_doc,
     clippy::missing_errors_doc,
-    clippy::unsafe_derive_deserialize
+    clippy::unsafe_derive_deserialize,
+    clippy::too_long_first_doc_paragraph
 )]
 extern crate alloc;
 
@@ -54,7 +55,7 @@ pub mod alice {
                 &[Self::IPacket, Self::DPacket, Self::CPacket, Self::SPacket];
             /// Returns the variant's name or "" if unknown.
             #[must_use]
-            pub fn variant_name(self) -> Option<&'static str> {
+            pub const fn variant_name(self) -> Option<&'static str> {
                 match self {
                     Self::IPacket => Some("IPacket"),
                     Self::DPacket => Some("DPacket"),
@@ -83,7 +84,7 @@ pub mod alice {
         }
 
         impl ::flatbuffers::Push for PacketType {
-            type Output = PacketType;
+            type Output = Self;
             #[inline]
             unsafe fn push(&self, dst: &mut [u8], _written_len: usize) {
                 unsafe { ::flatbuffers::emplace_scalar::<i8>(dst, self.0) };
@@ -170,7 +171,7 @@ pub mod alice {
             ];
             /// Returns the variant's name or "" if unknown.
             #[must_use]
-            pub fn variant_name(self) -> Option<&'static str> {
+            pub const fn variant_name(self) -> Option<&'static str> {
                 match self {
                     Self::Solid => Some("Solid"),
                     Self::GradientLinear => Some("GradientLinear"),
@@ -203,7 +204,7 @@ pub mod alice {
         }
 
         impl ::flatbuffers::Push for PatternType {
-            type Output = PatternType;
+            type Output = Self;
             #[inline]
             unsafe fn push(&self, dst: &mut [u8], _written_len: usize) {
                 unsafe { ::flatbuffers::emplace_scalar::<i8>(dst, self.0) };
@@ -284,7 +285,7 @@ pub mod alice {
             ];
             /// Returns the variant's name or "" if unknown.
             #[must_use]
-            pub fn variant_name(self) -> Option<&'static str> {
+            pub const fn variant_name(self) -> Option<&'static str> {
                 match self {
                     Self::None => Some("None"),
                     Self::Linear => Some("Linear"),
@@ -315,7 +316,7 @@ pub mod alice {
         }
 
         impl ::flatbuffers::Push for MotionType {
-            type Output = MotionType;
+            type Output = Self;
             #[inline]
             unsafe fn push(&self, dst: &mut [u8], _written_len: usize) {
                 unsafe { ::flatbuffers::emplace_scalar::<i8>(dst, self.0) };
@@ -396,7 +397,7 @@ pub mod alice {
             ];
             /// Returns the variant's name or "" if unknown.
             #[must_use]
-            pub fn variant_name(self) -> Option<&'static str> {
+            pub const fn variant_name(self) -> Option<&'static str> {
                 match self {
                     Self::General => Some("General"),
                     Self::Face => Some("Face"),
@@ -427,7 +428,7 @@ pub mod alice {
         }
 
         impl ::flatbuffers::Push for RoiType {
-            type Output = RoiType;
+            type Output = Self;
             #[inline]
             unsafe fn push(&self, dst: &mut [u8], _written_len: usize) {
                 unsafe { ::flatbuffers::emplace_scalar::<i8>(dst, self.0) };
@@ -498,7 +499,7 @@ pub mod alice {
                 &[Self::Low, Self::Medium, Self::High, Self::Ultra];
             /// Returns the variant's name or "" if unknown.
             #[must_use]
-            pub fn variant_name(self) -> Option<&'static str> {
+            pub const fn variant_name(self) -> Option<&'static str> {
                 match self {
                     Self::Low => Some("Low"),
                     Self::Medium => Some("Medium"),
@@ -527,7 +528,7 @@ pub mod alice {
         }
 
         impl ::flatbuffers::Push for QualityLevel {
-            type Output = QualityLevel;
+            type Output = Self;
             #[inline]
             unsafe fn push(&self, dst: &mut [u8], _written_len: usize) {
                 unsafe { ::flatbuffers::emplace_scalar::<i8>(dst, self.0) };
@@ -614,7 +615,7 @@ pub mod alice {
             ];
             /// Returns the variant's name or "" if unknown.
             #[must_use]
-            pub fn variant_name(self) -> Option<&'static str> {
+            pub const fn variant_name(self) -> Option<&'static str> {
                 match self {
                     Self::RequestKeyframe => Some("RequestKeyframe"),
                     Self::Ack => Some("Ack"),
@@ -647,7 +648,7 @@ pub mod alice {
         }
 
         impl ::flatbuffers::Push for SyncCommand {
-            type Output = SyncCommand;
+            type Output = Self;
             #[inline]
             unsafe fn push(&self, dst: &mut [u8], _written_len: usize) {
                 unsafe { ::flatbuffers::emplace_scalar::<i8>(dst, self.0) };
@@ -720,7 +721,7 @@ pub mod alice {
                 &[Self::Raw, Self::Rle, Self::Lz4, Self::Zstd, Self::DeltaRle];
             /// Returns the variant's name or "" if unknown.
             #[must_use]
-            pub fn variant_name(self) -> Option<&'static str> {
+            pub const fn variant_name(self) -> Option<&'static str> {
                 match self {
                     Self::Raw => Some("Raw"),
                     Self::Rle => Some("Rle"),
@@ -750,7 +751,7 @@ pub mod alice {
         }
 
         impl ::flatbuffers::Push for CompressionFormat {
-            type Output = CompressionFormat;
+            type Output = Self;
             #[inline]
             unsafe fn push(&self, dst: &mut [u8], _written_len: usize) {
                 unsafe { ::flatbuffers::emplace_scalar::<i8>(dst, self.0) };
@@ -831,7 +832,7 @@ pub mod alice {
             ];
             /// Returns the variant's name or "" if unknown.
             #[must_use]
-            pub fn variant_name(self) -> Option<&'static str> {
+            pub const fn variant_name(self) -> Option<&'static str> {
                 match self {
                     Self::Linear => Some("Linear"),
                     Self::EaseIn => Some("EaseIn"),
@@ -862,7 +863,7 @@ pub mod alice {
         }
 
         impl ::flatbuffers::Push for EasingType {
-            type Output = EasingType;
+            type Output = Self;
             #[inline]
             unsafe fn push(&self, dst: &mut [u8], _written_len: usize) {
                 unsafe { ::flatbuffers::emplace_scalar::<i8>(dst, self.0) };
@@ -943,7 +944,7 @@ pub mod alice {
             ];
             /// Returns the variant's name or "" if unknown.
             #[must_use]
-            pub fn variant_name(self) -> Option<&'static str> {
+            pub const fn variant_name(self) -> Option<&'static str> {
                 match self {
                     Self::NONE => Some("NONE"),
                     Self::SequenceData => Some("SequenceData"),
@@ -974,7 +975,7 @@ pub mod alice {
         }
 
         impl ::flatbuffers::Push for SyncDataUnion {
-            type Output = SyncDataUnion;
+            type Output = Self;
             #[inline]
             unsafe fn push(&self, dst: &mut [u8], _written_len: usize) {
                 unsafe { ::flatbuffers::emplace_scalar::<u8>(dst, self.0) };
@@ -1054,7 +1055,7 @@ pub mod alice {
             ];
             /// Returns the variant's name or "" if unknown.
             #[must_use]
-            pub fn variant_name(self) -> Option<&'static str> {
+            pub const fn variant_name(self) -> Option<&'static str> {
                 match self {
                     Self::NONE => Some("NONE"),
                     Self::IPacketPayload => Some("IPacketPayload"),
@@ -1084,7 +1085,7 @@ pub mod alice {
         }
 
         impl ::flatbuffers::Push for AspPayloadUnion {
-            type Output = AspPayloadUnion;
+            type Output = Self;
             #[inline]
             unsafe fn push(&self, dst: &mut [u8], _written_len: usize) {
                 unsafe { ::flatbuffers::emplace_scalar::<u8>(dst, self.0) };
@@ -1121,7 +1122,7 @@ pub mod alice {
         /// RGB Color (3 bytes)
         // struct Color, aligned to 1
         #[repr(transparent)]
-        #[derive(Clone, Copy, PartialEq)]
+        #[derive(Clone, Copy, PartialEq, Eq)]
         pub struct Color(pub [u8; 3]);
         impl Default for Color {
             fn default() -> Self {
@@ -1140,10 +1141,10 @@ pub mod alice {
 
         impl ::flatbuffers::SimpleToVerifyInSlice for Color {}
         impl<'a> ::flatbuffers::Follow<'a> for Color {
-            type Inner = &'a Color;
+            type Inner = &'a Self;
             #[inline]
             unsafe fn follow(buf: &'a [u8], loc: usize) -> Self::Inner {
-                unsafe { <&'a Color>::follow(buf, loc) }
+                unsafe { <&'a Self>::follow(buf, loc) }
             }
         }
         impl<'a> ::flatbuffers::Follow<'a> for &'a Color {
@@ -1154,12 +1155,12 @@ pub mod alice {
             }
         }
         impl<'b> ::flatbuffers::Push for Color {
-            type Output = Color;
+            type Output = Self;
             #[inline]
             unsafe fn push(&self, dst: &mut [u8], _written_len: usize) {
                 let src = unsafe {
                     ::core::slice::from_raw_parts(
-                        std::ptr::from_ref::<Color>(self).cast::<u8>(),
+                        std::ptr::from_ref::<Self>(self).cast::<u8>(),
                         <Self as ::flatbuffers::Push>::size(),
                     )
                 };
@@ -1292,7 +1293,7 @@ pub mod alice {
         /// 2D Point with integer coordinates (8 bytes)
         // struct Point, aligned to 4
         #[repr(transparent)]
-        #[derive(Clone, Copy, PartialEq)]
+        #[derive(Clone, Copy, PartialEq, Eq)]
         pub struct Point(pub [u8; 8]);
         impl Default for Point {
             fn default() -> Self {
@@ -1310,10 +1311,10 @@ pub mod alice {
 
         impl ::flatbuffers::SimpleToVerifyInSlice for Point {}
         impl<'a> ::flatbuffers::Follow<'a> for Point {
-            type Inner = &'a Point;
+            type Inner = &'a Self;
             #[inline]
             unsafe fn follow(buf: &'a [u8], loc: usize) -> Self::Inner {
-                unsafe { <&'a Point>::follow(buf, loc) }
+                unsafe { <&'a Self>::follow(buf, loc) }
             }
         }
         impl<'a> ::flatbuffers::Follow<'a> for &'a Point {
@@ -1324,12 +1325,12 @@ pub mod alice {
             }
         }
         impl<'b> ::flatbuffers::Push for Point {
-            type Output = Point;
+            type Output = Self;
             #[inline]
             unsafe fn push(&self, dst: &mut [u8], _written_len: usize) {
                 let src = unsafe {
                     ::core::slice::from_raw_parts(
-                        std::ptr::from_ref::<Point>(self).cast::<u8>(),
+                        std::ptr::from_ref::<Self>(self).cast::<u8>(),
                         <Self as ::flatbuffers::Push>::size(),
                     )
                 };
@@ -1429,7 +1430,7 @@ pub mod alice {
         /// Rectangle definition (16 bytes)
         // struct Rect, aligned to 4
         #[repr(transparent)]
-        #[derive(Clone, Copy, PartialEq)]
+        #[derive(Clone, Copy, PartialEq, Eq)]
         pub struct Rect(pub [u8; 16]);
         impl Default for Rect {
             fn default() -> Self {
@@ -1449,10 +1450,10 @@ pub mod alice {
 
         impl ::flatbuffers::SimpleToVerifyInSlice for Rect {}
         impl<'a> ::flatbuffers::Follow<'a> for Rect {
-            type Inner = &'a Rect;
+            type Inner = &'a Self;
             #[inline]
             unsafe fn follow(buf: &'a [u8], loc: usize) -> Self::Inner {
-                unsafe { <&'a Rect>::follow(buf, loc) }
+                unsafe { <&'a Self>::follow(buf, loc) }
             }
         }
         impl<'a> ::flatbuffers::Follow<'a> for &'a Rect {
@@ -1463,12 +1464,12 @@ pub mod alice {
             }
         }
         impl<'b> ::flatbuffers::Push for Rect {
-            type Output = Rect;
+            type Output = Self;
             #[inline]
             unsafe fn push(&self, dst: &mut [u8], _written_len: usize) {
                 let src = unsafe {
                     ::core::slice::from_raw_parts(
-                        std::ptr::from_ref::<Rect>(self).cast::<u8>(),
+                        std::ptr::from_ref::<Self>(self).cast::<u8>(),
                         <Self as ::flatbuffers::Push>::size(),
                     )
                 };
@@ -1636,7 +1637,7 @@ pub mod alice {
         /// uint16 range (0-65535) is sufficient for block indices.
         // struct MotionVector, aligned to 4
         #[repr(transparent)]
-        #[derive(Clone, Copy, PartialEq)]
+        #[derive(Clone, Copy, PartialEq, Eq)]
         pub struct MotionVector(pub [u8; 12]);
         impl Default for MotionVector {
             fn default() -> Self {
@@ -1657,10 +1658,10 @@ pub mod alice {
 
         impl ::flatbuffers::SimpleToVerifyInSlice for MotionVector {}
         impl<'a> ::flatbuffers::Follow<'a> for MotionVector {
-            type Inner = &'a MotionVector;
+            type Inner = &'a Self;
             #[inline]
             unsafe fn follow(buf: &'a [u8], loc: usize) -> Self::Inner {
-                unsafe { <&'a MotionVector>::follow(buf, loc) }
+                unsafe { <&'a Self>::follow(buf, loc) }
             }
         }
         impl<'a> ::flatbuffers::Follow<'a> for &'a MotionVector {
@@ -1671,12 +1672,12 @@ pub mod alice {
             }
         }
         impl<'b> ::flatbuffers::Push for MotionVector {
-            type Output = MotionVector;
+            type Output = Self;
             #[inline]
             unsafe fn push(&self, dst: &mut [u8], _written_len: usize) {
                 let src = unsafe {
                     ::core::slice::from_raw_parts(
-                        std::ptr::from_ref::<MotionVector>(self).cast::<u8>(),
+                        std::ptr::from_ref::<Self>(self).cast::<u8>(),
                         <Self as ::flatbuffers::Push>::size(),
                     )
                 };
@@ -1877,7 +1878,7 @@ pub mod alice {
         /// SAD is omitted as it's only needed during encoding.
         // struct MotionVectorCompact, aligned to 1
         #[repr(transparent)]
-        #[derive(Clone, Copy, PartialEq)]
+        #[derive(Clone, Copy, PartialEq, Eq)]
         pub struct MotionVectorCompact(pub [u8; 2]);
         impl Default for MotionVectorCompact {
             fn default() -> Self {
@@ -1895,10 +1896,10 @@ pub mod alice {
 
         impl ::flatbuffers::SimpleToVerifyInSlice for MotionVectorCompact {}
         impl<'a> ::flatbuffers::Follow<'a> for MotionVectorCompact {
-            type Inner = &'a MotionVectorCompact;
+            type Inner = &'a Self;
             #[inline]
             unsafe fn follow(buf: &'a [u8], loc: usize) -> Self::Inner {
-                unsafe { <&'a MotionVectorCompact>::follow(buf, loc) }
+                unsafe { <&'a Self>::follow(buf, loc) }
             }
         }
         impl<'a> ::flatbuffers::Follow<'a> for &'a MotionVectorCompact {
@@ -1909,12 +1910,12 @@ pub mod alice {
             }
         }
         impl<'b> ::flatbuffers::Push for MotionVectorCompact {
-            type Output = MotionVectorCompact;
+            type Output = Self;
             #[inline]
             unsafe fn push(&self, dst: &mut [u8], _written_len: usize) {
                 let src = unsafe {
                     ::core::slice::from_raw_parts(
-                        std::ptr::from_ref::<MotionVectorCompact>(self).cast::<u8>(),
+                        std::ptr::from_ref::<Self>(self).cast::<u8>(),
                         <Self as ::flatbuffers::Push>::size(),
                     )
                 };
@@ -2014,7 +2015,7 @@ pub mod alice {
         /// DCT coefficient (sparse representation)
         // struct DctCoefficient, aligned to 4
         #[repr(transparent)]
-        #[derive(Clone, Copy, PartialEq)]
+        #[derive(Clone, Copy, PartialEq, Eq)]
         pub struct DctCoefficient(pub [u8; 8]);
         impl Default for DctCoefficient {
             fn default() -> Self {
@@ -2033,10 +2034,10 @@ pub mod alice {
 
         impl ::flatbuffers::SimpleToVerifyInSlice for DctCoefficient {}
         impl<'a> ::flatbuffers::Follow<'a> for DctCoefficient {
-            type Inner = &'a DctCoefficient;
+            type Inner = &'a Self;
             #[inline]
             unsafe fn follow(buf: &'a [u8], loc: usize) -> Self::Inner {
-                unsafe { <&'a DctCoefficient>::follow(buf, loc) }
+                unsafe { <&'a Self>::follow(buf, loc) }
             }
         }
         impl<'a> ::flatbuffers::Follow<'a> for &'a DctCoefficient {
@@ -2047,12 +2048,12 @@ pub mod alice {
             }
         }
         impl<'b> ::flatbuffers::Push for DctCoefficient {
-            type Output = DctCoefficient;
+            type Output = Self;
             #[inline]
             unsafe fn push(&self, dst: &mut [u8], _written_len: usize) {
                 let src = unsafe {
                     ::core::slice::from_raw_parts(
-                        std::ptr::from_ref::<DctCoefficient>(self).cast::<u8>(),
+                        std::ptr::from_ref::<Self>(self).cast::<u8>(),
                         <Self as ::flatbuffers::Push>::size(),
                     )
                 };
@@ -2183,7 +2184,7 @@ pub mod alice {
         }
 
         pub enum ColorPaletteOffset {}
-        #[derive(Copy, Clone, PartialEq)]
+        #[derive(Copy, Clone, PartialEq, Eq)]
 
         /// Color palette for procedural generation
         pub struct ColorPalette<'a> {
@@ -2191,7 +2192,7 @@ pub mod alice {
         }
 
         impl<'a> ::flatbuffers::Follow<'a> for ColorPalette<'a> {
-            type Inner = ColorPalette<'a>;
+            type Inner = Self;
             #[inline]
             unsafe fn follow(buf: &'a [u8], loc: usize) -> Self::Inner {
                 Self {
@@ -2206,7 +2207,7 @@ pub mod alice {
 
             #[inline]
             #[must_use]
-            pub unsafe fn init_from_table(table: ::flatbuffers::Table<'a>) -> Self {
+            pub const unsafe fn init_from_table(table: ::flatbuffers::Table<'a>) -> Self {
                 ColorPalette { _tab: table }
             }
             #[allow(unused_mut)]
@@ -2312,9 +2313,7 @@ pub mod alice {
                 );
             }
             #[inline]
-            pub fn new(
-                _fbb: &'b mut ::flatbuffers::FlatBufferBuilder<'a, A>,
-            ) -> ColorPaletteBuilder<'a, 'b, A> {
+            pub fn new(_fbb: &'b mut ::flatbuffers::FlatBufferBuilder<'a, A>) -> Self {
                 let start = _fbb.start_table();
                 ColorPaletteBuilder {
                     fbb_: _fbb,
@@ -2338,7 +2337,7 @@ pub mod alice {
             }
         }
         pub enum AnimationParamsOffset {}
-        #[derive(Copy, Clone, PartialEq)]
+        #[derive(Copy, Clone, PartialEq, Eq)]
 
         /// Animation parameters
         pub struct AnimationParams<'a> {
@@ -2346,7 +2345,7 @@ pub mod alice {
         }
 
         impl<'a> ::flatbuffers::Follow<'a> for AnimationParams<'a> {
-            type Inner = AnimationParams<'a>;
+            type Inner = Self;
             #[inline]
             unsafe fn follow(buf: &'a [u8], loc: usize) -> Self::Inner {
                 Self {
@@ -2365,7 +2364,7 @@ pub mod alice {
 
             #[inline]
             #[must_use]
-            pub unsafe fn init_from_table(table: ::flatbuffers::Table<'a>) -> Self {
+            pub const unsafe fn init_from_table(table: ::flatbuffers::Table<'a>) -> Self {
                 AnimationParams { _tab: table }
             }
             #[allow(unused_mut)]
@@ -2490,7 +2489,7 @@ pub mod alice {
         impl<'a> Default for AnimationParamsArgs {
             #[inline]
             fn default() -> Self {
-                AnimationParamsArgs {
+                Self {
                     zoom_factor: 1.0,
                     pan_x: 0.0,
                     pan_y: 0.0,
@@ -2540,9 +2539,7 @@ pub mod alice {
                 );
             }
             #[inline]
-            pub fn new(
-                _fbb: &'b mut ::flatbuffers::FlatBufferBuilder<'a, A>,
-            ) -> AnimationParamsBuilder<'a, 'b, A> {
+            pub fn new(_fbb: &'b mut ::flatbuffers::FlatBufferBuilder<'a, A>) -> Self {
                 let start = _fbb.start_table();
                 AnimationParamsBuilder {
                     fbb_: _fbb,
@@ -2570,7 +2567,7 @@ pub mod alice {
             }
         }
         pub enum ParamOffset {}
-        #[derive(Copy, Clone, PartialEq)]
+        #[derive(Copy, Clone, PartialEq, Eq)]
 
         /// Key-value parameter (for extensibility)
         pub struct Param<'a> {
@@ -2578,7 +2575,7 @@ pub mod alice {
         }
 
         impl<'a> ::flatbuffers::Follow<'a> for Param<'a> {
-            type Inner = Param<'a>;
+            type Inner = Self;
             #[inline]
             unsafe fn follow(buf: &'a [u8], loc: usize) -> Self::Inner {
                 Self {
@@ -2593,7 +2590,7 @@ pub mod alice {
 
             #[inline]
             #[must_use]
-            pub unsafe fn init_from_table(table: ::flatbuffers::Table<'a>) -> Self {
+            pub const unsafe fn init_from_table(table: ::flatbuffers::Table<'a>) -> Self {
                 Param { _tab: table }
             }
             #[allow(unused_mut)]
@@ -2681,9 +2678,7 @@ pub mod alice {
                 self.fbb_.push_slot::<f32>(Param::VT_VALUE, value, 0.0);
             }
             #[inline]
-            pub fn new(
-                _fbb: &'b mut ::flatbuffers::FlatBufferBuilder<'a, A>,
-            ) -> ParamBuilder<'a, 'b, A> {
+            pub fn new(_fbb: &'b mut ::flatbuffers::FlatBufferBuilder<'a, A>) -> Self {
                 let start = _fbb.start_table();
                 ParamBuilder {
                     fbb_: _fbb,
@@ -2707,7 +2702,7 @@ pub mod alice {
             }
         }
         pub enum RegionDescriptorOffset {}
-        #[derive(Copy, Clone, PartialEq)]
+        #[derive(Copy, Clone, PartialEq, Eq)]
 
         /// Region descriptor for procedural generation
         pub struct RegionDescriptor<'a> {
@@ -2715,7 +2710,7 @@ pub mod alice {
         }
 
         impl<'a> ::flatbuffers::Follow<'a> for RegionDescriptor<'a> {
-            type Inner = RegionDescriptor<'a>;
+            type Inner = Self;
             #[inline]
             unsafe fn follow(buf: &'a [u8], loc: usize) -> Self::Inner {
                 Self {
@@ -2734,7 +2729,7 @@ pub mod alice {
 
             #[inline]
             #[must_use]
-            pub unsafe fn init_from_table(table: ::flatbuffers::Table<'a>) -> Self {
+            pub const unsafe fn init_from_table(table: ::flatbuffers::Table<'a>) -> Self {
                 RegionDescriptor { _tab: table }
             }
             #[allow(unused_mut)]
@@ -2943,9 +2938,7 @@ pub mod alice {
                 );
             }
             #[inline]
-            pub fn new(
-                _fbb: &'b mut ::flatbuffers::FlatBufferBuilder<'a, A>,
-            ) -> RegionDescriptorBuilder<'a, 'b, A> {
+            pub fn new(_fbb: &'b mut ::flatbuffers::FlatBufferBuilder<'a, A>) -> Self {
                 let start = _fbb.start_table();
                 RegionDescriptorBuilder {
                     fbb_: _fbb,
@@ -2973,7 +2966,7 @@ pub mod alice {
             }
         }
         pub enum IPacketPayloadOffset {}
-        #[derive(Copy, Clone, PartialEq)]
+        #[derive(Copy, Clone, PartialEq, Eq)]
 
         /// I-Packet payload: Full frame description (Keyframe)
         pub struct IPacketPayload<'a> {
@@ -2981,7 +2974,7 @@ pub mod alice {
         }
 
         impl<'a> ::flatbuffers::Follow<'a> for IPacketPayload<'a> {
-            type Inner = IPacketPayload<'a>;
+            type Inner = Self;
             #[inline]
             unsafe fn follow(buf: &'a [u8], loc: usize) -> Self::Inner {
                 Self {
@@ -3002,7 +2995,7 @@ pub mod alice {
 
             #[inline]
             #[must_use]
-            pub unsafe fn init_from_table(table: ::flatbuffers::Table<'a>) -> Self {
+            pub const unsafe fn init_from_table(table: ::flatbuffers::Table<'a>) -> Self {
                 IPacketPayload { _tab: table }
             }
             #[allow(unused_mut)]
@@ -3265,9 +3258,7 @@ pub mod alice {
                     .push_slot::<u64>(IPacketPayload::VT_TIMESTAMP_MS, timestamp_ms, 0);
             }
             #[inline]
-            pub fn new(
-                _fbb: &'b mut ::flatbuffers::FlatBufferBuilder<'a, A>,
-            ) -> IPacketPayloadBuilder<'a, 'b, A> {
+            pub fn new(_fbb: &'b mut ::flatbuffers::FlatBufferBuilder<'a, A>) -> Self {
                 let start = _fbb.start_table();
                 IPacketPayloadBuilder {
                     fbb_: _fbb,
@@ -3297,7 +3288,7 @@ pub mod alice {
             }
         }
         pub enum RegionDeltaOffset {}
-        #[derive(Copy, Clone, PartialEq)]
+        #[derive(Copy, Clone, PartialEq, Eq)]
 
         /// Delta update for a region
         pub struct RegionDelta<'a> {
@@ -3305,7 +3296,7 @@ pub mod alice {
         }
 
         impl<'a> ::flatbuffers::Follow<'a> for RegionDelta<'a> {
-            type Inner = RegionDelta<'a>;
+            type Inner = Self;
             #[inline]
             unsafe fn follow(buf: &'a [u8], loc: usize) -> Self::Inner {
                 Self {
@@ -3322,7 +3313,7 @@ pub mod alice {
 
             #[inline]
             #[must_use]
-            pub unsafe fn init_from_table(table: ::flatbuffers::Table<'a>) -> Self {
+            pub const unsafe fn init_from_table(table: ::flatbuffers::Table<'a>) -> Self {
                 RegionDelta { _tab: table }
             }
             #[allow(unused_mut)]
@@ -3486,9 +3477,7 @@ pub mod alice {
                 );
             }
             #[inline]
-            pub fn new(
-                _fbb: &'b mut ::flatbuffers::FlatBufferBuilder<'a, A>,
-            ) -> RegionDeltaBuilder<'a, 'b, A> {
+            pub fn new(_fbb: &'b mut ::flatbuffers::FlatBufferBuilder<'a, A>) -> Self {
                 let start = _fbb.start_table();
                 RegionDeltaBuilder {
                     fbb_: _fbb,
@@ -3514,7 +3503,7 @@ pub mod alice {
             }
         }
         pub enum DPacketPayloadOffset {}
-        #[derive(Copy, Clone, PartialEq)]
+        #[derive(Copy, Clone, PartialEq, Eq)]
 
         /// D-Packet payload: Delta/incremental update
         pub struct DPacketPayload<'a> {
@@ -3522,7 +3511,7 @@ pub mod alice {
         }
 
         impl<'a> ::flatbuffers::Follow<'a> for DPacketPayload<'a> {
-            type Inner = DPacketPayload<'a>;
+            type Inner = Self;
             #[inline]
             unsafe fn follow(buf: &'a [u8], loc: usize) -> Self::Inner {
                 Self {
@@ -3541,7 +3530,7 @@ pub mod alice {
 
             #[inline]
             #[must_use]
-            pub unsafe fn init_from_table(table: ::flatbuffers::Table<'a>) -> Self {
+            pub const unsafe fn init_from_table(table: ::flatbuffers::Table<'a>) -> Self {
                 DPacketPayload { _tab: table }
             }
             #[allow(unused_mut)]
@@ -3757,9 +3746,7 @@ pub mod alice {
                     .push_slot::<u64>(DPacketPayload::VT_TIMESTAMP_MS, timestamp_ms, 0);
             }
             #[inline]
-            pub fn new(
-                _fbb: &'b mut ::flatbuffers::FlatBufferBuilder<'a, A>,
-            ) -> DPacketPayloadBuilder<'a, 'b, A> {
+            pub fn new(_fbb: &'b mut ::flatbuffers::FlatBufferBuilder<'a, A>) -> Self {
                 let start = _fbb.start_table();
                 DPacketPayloadBuilder {
                     fbb_: _fbb,
@@ -3787,7 +3774,7 @@ pub mod alice {
             }
         }
         pub enum RoiRegionOffset {}
-        #[derive(Copy, Clone, PartialEq)]
+        #[derive(Copy, Clone, PartialEq, Eq)]
 
         /// ROI region for correction
         pub struct RoiRegion<'a> {
@@ -3795,7 +3782,7 @@ pub mod alice {
         }
 
         impl<'a> ::flatbuffers::Follow<'a> for RoiRegion<'a> {
-            type Inner = RoiRegion<'a>;
+            type Inner = Self;
             #[inline]
             unsafe fn follow(buf: &'a [u8], loc: usize) -> Self::Inner {
                 Self {
@@ -3812,7 +3799,7 @@ pub mod alice {
 
             #[inline]
             #[must_use]
-            pub unsafe fn init_from_table(table: ::flatbuffers::Table<'a>) -> Self {
+            pub const unsafe fn init_from_table(table: ::flatbuffers::Table<'a>) -> Self {
                 RoiRegion { _tab: table }
             }
             #[allow(unused_mut)]
@@ -3940,9 +3927,7 @@ pub mod alice {
                     .push_slot::<f32>(RoiRegion::VT_CONFIDENCE, confidence, 1.0);
             }
             #[inline]
-            pub fn new(
-                _fbb: &'b mut ::flatbuffers::FlatBufferBuilder<'a, A>,
-            ) -> RoiRegionBuilder<'a, 'b, A> {
+            pub fn new(_fbb: &'b mut ::flatbuffers::FlatBufferBuilder<'a, A>) -> Self {
                 let start = _fbb.start_table();
                 RoiRegionBuilder {
                     fbb_: _fbb,
@@ -3968,7 +3953,7 @@ pub mod alice {
             }
         }
         pub enum CorrectionDataOffset {}
-        #[derive(Copy, Clone, PartialEq)]
+        #[derive(Copy, Clone, PartialEq, Eq)]
 
         /// Correction data for a region
         pub struct CorrectionData<'a> {
@@ -3976,7 +3961,7 @@ pub mod alice {
         }
 
         impl<'a> ::flatbuffers::Follow<'a> for CorrectionData<'a> {
-            type Inner = CorrectionData<'a>;
+            type Inner = Self;
             #[inline]
             unsafe fn follow(buf: &'a [u8], loc: usize) -> Self::Inner {
                 Self {
@@ -3992,7 +3977,7 @@ pub mod alice {
 
             #[inline]
             #[must_use]
-            pub unsafe fn init_from_table(table: ::flatbuffers::Table<'a>) -> Self {
+            pub const unsafe fn init_from_table(table: ::flatbuffers::Table<'a>) -> Self {
                 CorrectionData { _tab: table }
             }
             #[allow(unused_mut)]
@@ -4130,9 +4115,7 @@ pub mod alice {
                 );
             }
             #[inline]
-            pub fn new(
-                _fbb: &'b mut ::flatbuffers::FlatBufferBuilder<'a, A>,
-            ) -> CorrectionDataBuilder<'a, 'b, A> {
+            pub fn new(_fbb: &'b mut ::flatbuffers::FlatBufferBuilder<'a, A>) -> Self {
                 let start = _fbb.start_table();
                 CorrectionDataBuilder {
                     fbb_: _fbb,
@@ -4157,7 +4140,7 @@ pub mod alice {
             }
         }
         pub enum CPacketPayloadOffset {}
-        #[derive(Copy, Clone, PartialEq)]
+        #[derive(Copy, Clone, PartialEq, Eq)]
 
         /// C-Packet payload: Correction data
         pub struct CPacketPayload<'a> {
@@ -4165,7 +4148,7 @@ pub mod alice {
         }
 
         impl<'a> ::flatbuffers::Follow<'a> for CPacketPayload<'a> {
-            type Inner = CPacketPayload<'a>;
+            type Inner = Self;
             #[inline]
             unsafe fn follow(buf: &'a [u8], loc: usize) -> Self::Inner {
                 Self {
@@ -4182,7 +4165,7 @@ pub mod alice {
 
             #[inline]
             #[must_use]
-            pub unsafe fn init_from_table(table: ::flatbuffers::Table<'a>) -> Self {
+            pub const unsafe fn init_from_table(table: ::flatbuffers::Table<'a>) -> Self {
                 CPacketPayload { _tab: table }
             }
             #[allow(unused_mut)]
@@ -4333,9 +4316,7 @@ pub mod alice {
                     .push_slot::<u64>(CPacketPayload::VT_TIMESTAMP_MS, timestamp_ms, 0);
             }
             #[inline]
-            pub fn new(
-                _fbb: &'b mut ::flatbuffers::FlatBufferBuilder<'a, A>,
-            ) -> CPacketPayloadBuilder<'a, 'b, A> {
+            pub fn new(_fbb: &'b mut ::flatbuffers::FlatBufferBuilder<'a, A>) -> Self {
                 let start = _fbb.start_table();
                 CPacketPayloadBuilder {
                     fbb_: _fbb,
@@ -4361,14 +4342,14 @@ pub mod alice {
             }
         }
         pub enum SequenceDataOffset {}
-        #[derive(Copy, Clone, PartialEq)]
+        #[derive(Copy, Clone, PartialEq, Eq)]
 
         pub struct SequenceData<'a> {
             pub _tab: ::flatbuffers::Table<'a>,
         }
 
         impl<'a> ::flatbuffers::Follow<'a> for SequenceData<'a> {
-            type Inner = SequenceData<'a>;
+            type Inner = Self;
             #[inline]
             unsafe fn follow(buf: &'a [u8], loc: usize) -> Self::Inner {
                 Self {
@@ -4382,7 +4363,7 @@ pub mod alice {
 
             #[inline]
             #[must_use]
-            pub unsafe fn init_from_table(table: ::flatbuffers::Table<'a>) -> Self {
+            pub const unsafe fn init_from_table(table: ::flatbuffers::Table<'a>) -> Self {
                 SequenceData { _tab: table }
             }
             #[allow(unused_mut)]
@@ -4432,7 +4413,7 @@ pub mod alice {
         impl<'a> Default for SequenceDataArgs {
             #[inline]
             fn default() -> Self {
-                SequenceDataArgs { sequence: 0 }
+                Self { sequence: 0 }
             }
         }
 
@@ -4447,9 +4428,7 @@ pub mod alice {
                     .push_slot::<u32>(SequenceData::VT_SEQUENCE, sequence, 0);
             }
             #[inline]
-            pub fn new(
-                _fbb: &'b mut ::flatbuffers::FlatBufferBuilder<'a, A>,
-            ) -> SequenceDataBuilder<'a, 'b, A> {
+            pub fn new(_fbb: &'b mut ::flatbuffers::FlatBufferBuilder<'a, A>) -> Self {
                 let start = _fbb.start_table();
                 SequenceDataBuilder {
                     fbb_: _fbb,
@@ -4472,14 +4451,14 @@ pub mod alice {
             }
         }
         pub enum BitrateDataOffset {}
-        #[derive(Copy, Clone, PartialEq)]
+        #[derive(Copy, Clone, PartialEq, Eq)]
 
         pub struct BitrateData<'a> {
             pub _tab: ::flatbuffers::Table<'a>,
         }
 
         impl<'a> ::flatbuffers::Follow<'a> for BitrateData<'a> {
-            type Inner = BitrateData<'a>;
+            type Inner = Self;
             #[inline]
             unsafe fn follow(buf: &'a [u8], loc: usize) -> Self::Inner {
                 Self {
@@ -4493,7 +4472,7 @@ pub mod alice {
 
             #[inline]
             #[must_use]
-            pub unsafe fn init_from_table(table: ::flatbuffers::Table<'a>) -> Self {
+            pub const unsafe fn init_from_table(table: ::flatbuffers::Table<'a>) -> Self {
                 BitrateData { _tab: table }
             }
             #[allow(unused_mut)]
@@ -4543,7 +4522,7 @@ pub mod alice {
         impl<'a> Default for BitrateDataArgs {
             #[inline]
             fn default() -> Self {
-                BitrateDataArgs { bitrate_kbps: 0 }
+                Self { bitrate_kbps: 0 }
             }
         }
 
@@ -4558,9 +4537,7 @@ pub mod alice {
                     .push_slot::<u32>(BitrateData::VT_BITRATE_KBPS, bitrate_kbps, 0);
             }
             #[inline]
-            pub fn new(
-                _fbb: &'b mut ::flatbuffers::FlatBufferBuilder<'a, A>,
-            ) -> BitrateDataBuilder<'a, 'b, A> {
+            pub fn new(_fbb: &'b mut ::flatbuffers::FlatBufferBuilder<'a, A>) -> Self {
                 let start = _fbb.start_table();
                 BitrateDataBuilder {
                     fbb_: _fbb,
@@ -4583,14 +4560,14 @@ pub mod alice {
             }
         }
         pub enum QualityDataOffset {}
-        #[derive(Copy, Clone, PartialEq)]
+        #[derive(Copy, Clone, PartialEq, Eq)]
 
         pub struct QualityData<'a> {
             pub _tab: ::flatbuffers::Table<'a>,
         }
 
         impl<'a> ::flatbuffers::Follow<'a> for QualityData<'a> {
-            type Inner = QualityData<'a>;
+            type Inner = Self;
             #[inline]
             unsafe fn follow(buf: &'a [u8], loc: usize) -> Self::Inner {
                 Self {
@@ -4604,7 +4581,7 @@ pub mod alice {
 
             #[inline]
             #[must_use]
-            pub unsafe fn init_from_table(table: ::flatbuffers::Table<'a>) -> Self {
+            pub const unsafe fn init_from_table(table: ::flatbuffers::Table<'a>) -> Self {
                 QualityData { _tab: table }
             }
             #[allow(unused_mut)]
@@ -4654,7 +4631,7 @@ pub mod alice {
         impl<'a> Default for QualityDataArgs {
             #[inline]
             fn default() -> Self {
-                QualityDataArgs {
+                Self {
                     quality: QualityLevel::Low,
                 }
             }
@@ -4674,9 +4651,7 @@ pub mod alice {
                 );
             }
             #[inline]
-            pub fn new(
-                _fbb: &'b mut ::flatbuffers::FlatBufferBuilder<'a, A>,
-            ) -> QualityDataBuilder<'a, 'b, A> {
+            pub fn new(_fbb: &'b mut ::flatbuffers::FlatBufferBuilder<'a, A>) -> Self {
                 let start = _fbb.start_table();
                 QualityDataBuilder {
                     fbb_: _fbb,
@@ -4699,14 +4674,14 @@ pub mod alice {
             }
         }
         pub enum LatencyDataOffset {}
-        #[derive(Copy, Clone, PartialEq)]
+        #[derive(Copy, Clone, PartialEq, Eq)]
 
         pub struct LatencyData<'a> {
             pub _tab: ::flatbuffers::Table<'a>,
         }
 
         impl<'a> ::flatbuffers::Follow<'a> for LatencyData<'a> {
-            type Inner = LatencyData<'a>;
+            type Inner = Self;
             #[inline]
             unsafe fn follow(buf: &'a [u8], loc: usize) -> Self::Inner {
                 Self {
@@ -4720,7 +4695,7 @@ pub mod alice {
 
             #[inline]
             #[must_use]
-            pub unsafe fn init_from_table(table: ::flatbuffers::Table<'a>) -> Self {
+            pub const unsafe fn init_from_table(table: ::flatbuffers::Table<'a>) -> Self {
                 LatencyData { _tab: table }
             }
             #[allow(unused_mut)]
@@ -4770,7 +4745,7 @@ pub mod alice {
         impl<'a> Default for LatencyDataArgs {
             #[inline]
             fn default() -> Self {
-                LatencyDataArgs { latency_ms: 0 }
+                Self { latency_ms: 0 }
             }
         }
 
@@ -4785,9 +4760,7 @@ pub mod alice {
                     .push_slot::<u32>(LatencyData::VT_LATENCY_MS, latency_ms, 0);
             }
             #[inline]
-            pub fn new(
-                _fbb: &'b mut ::flatbuffers::FlatBufferBuilder<'a, A>,
-            ) -> LatencyDataBuilder<'a, 'b, A> {
+            pub fn new(_fbb: &'b mut ::flatbuffers::FlatBufferBuilder<'a, A>) -> Self {
                 let start = _fbb.start_table();
                 LatencyDataBuilder {
                     fbb_: _fbb,
@@ -4810,14 +4783,14 @@ pub mod alice {
             }
         }
         pub enum CustomDataOffset {}
-        #[derive(Copy, Clone, PartialEq)]
+        #[derive(Copy, Clone, PartialEq, Eq)]
 
         pub struct CustomData<'a> {
             pub _tab: ::flatbuffers::Table<'a>,
         }
 
         impl<'a> ::flatbuffers::Follow<'a> for CustomData<'a> {
-            type Inner = CustomData<'a>;
+            type Inner = Self;
             #[inline]
             unsafe fn follow(buf: &'a [u8], loc: usize) -> Self::Inner {
                 Self {
@@ -4831,7 +4804,7 @@ pub mod alice {
 
             #[inline]
             #[must_use]
-            pub unsafe fn init_from_table(table: ::flatbuffers::Table<'a>) -> Self {
+            pub const unsafe fn init_from_table(table: ::flatbuffers::Table<'a>) -> Self {
                 CustomData { _tab: table }
             }
             #[allow(unused_mut)]
@@ -4907,9 +4880,7 @@ pub mod alice {
                     .push_slot_always::<::flatbuffers::WIPOffset<_>>(CustomData::VT_DATA, data);
             }
             #[inline]
-            pub fn new(
-                _fbb: &'b mut ::flatbuffers::FlatBufferBuilder<'a, A>,
-            ) -> CustomDataBuilder<'a, 'b, A> {
+            pub fn new(_fbb: &'b mut ::flatbuffers::FlatBufferBuilder<'a, A>) -> Self {
                 let start = _fbb.start_table();
                 CustomDataBuilder {
                     fbb_: _fbb,
@@ -4932,7 +4903,7 @@ pub mod alice {
             }
         }
         pub enum SPacketPayloadOffset {}
-        #[derive(Copy, Clone, PartialEq)]
+        #[derive(Copy, Clone, PartialEq, Eq)]
 
         /// S-Packet payload: Sync/Control
         pub struct SPacketPayload<'a> {
@@ -4940,7 +4911,7 @@ pub mod alice {
         }
 
         impl<'a> ::flatbuffers::Follow<'a> for SPacketPayload<'a> {
-            type Inner = SPacketPayload<'a>;
+            type Inner = Self;
             #[inline]
             unsafe fn follow(buf: &'a [u8], loc: usize) -> Self::Inner {
                 Self {
@@ -4957,7 +4928,7 @@ pub mod alice {
 
             #[inline]
             #[must_use]
-            pub unsafe fn init_from_table(table: ::flatbuffers::Table<'a>) -> Self {
+            pub const unsafe fn init_from_table(table: ::flatbuffers::Table<'a>) -> Self {
                 SPacketPayload { _tab: table }
             }
             #[allow(unused_mut)]
@@ -5146,7 +5117,7 @@ pub mod alice {
         impl<'a> Default for SPacketPayloadArgs {
             #[inline]
             fn default() -> Self {
-                SPacketPayloadArgs {
+                Self {
                     command: SyncCommand::Ping,
                     data_type: SyncDataUnion::NONE,
                     data: None,
@@ -5190,9 +5161,7 @@ pub mod alice {
                     .push_slot::<u64>(SPacketPayload::VT_TIMESTAMP_MS, timestamp_ms, 0);
             }
             #[inline]
-            pub fn new(
-                _fbb: &'b mut ::flatbuffers::FlatBufferBuilder<'a, A>,
-            ) -> SPacketPayloadBuilder<'a, 'b, A> {
+            pub fn new(_fbb: &'b mut ::flatbuffers::FlatBufferBuilder<'a, A>) -> Self {
                 let start = _fbb.start_table();
                 SPacketPayloadBuilder {
                     fbb_: _fbb,
@@ -5273,7 +5242,7 @@ pub mod alice {
             }
         }
         pub enum AspPacketPayloadOffset {}
-        #[derive(Copy, Clone, PartialEq)]
+        #[derive(Copy, Clone, PartialEq, Eq)]
 
         /// Root packet structure
         /// Note: Header (16 bytes) is still manual-packed for maximum performance.
@@ -5283,7 +5252,7 @@ pub mod alice {
         }
 
         impl<'a> ::flatbuffers::Follow<'a> for AspPacketPayload<'a> {
-            type Inner = AspPacketPayload<'a>;
+            type Inner = Self;
             #[inline]
             unsafe fn follow(buf: &'a [u8], loc: usize) -> Self::Inner {
                 Self {
@@ -5298,7 +5267,7 @@ pub mod alice {
 
             #[inline]
             #[must_use]
-            pub unsafe fn init_from_table(table: ::flatbuffers::Table<'a>) -> Self {
+            pub const unsafe fn init_from_table(table: ::flatbuffers::Table<'a>) -> Self {
                 AspPacketPayload { _tab: table }
             }
             #[allow(unused_mut)]
@@ -5440,7 +5409,7 @@ pub mod alice {
         impl<'a> Default for AspPacketPayloadArgs {
             #[inline]
             fn default() -> Self {
-                AspPacketPayloadArgs {
+                Self {
                     payload_type: AspPayloadUnion::NONE,
                     payload: None,
                 }
@@ -5471,9 +5440,7 @@ pub mod alice {
                 );
             }
             #[inline]
-            pub fn new(
-                _fbb: &'b mut ::flatbuffers::FlatBufferBuilder<'a, A>,
-            ) -> AspPacketPayloadBuilder<'a, 'b, A> {
+            pub fn new(_fbb: &'b mut ::flatbuffers::FlatBufferBuilder<'a, A>) -> Self {
                 let start = _fbb.start_table();
                 AspPacketPayloadBuilder {
                     fbb_: _fbb,

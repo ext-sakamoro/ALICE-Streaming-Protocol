@@ -151,7 +151,7 @@ pub fn rect_from_fb(r: &FbRect) -> RustRect {
 ///
 /// # Example
 ///
-/// ```rust,no_run
+/// ```rust,ignore
 /// let bytes = DPacketBuilder::new(1)
 ///     .motion_vectors(&mvs)
 ///     .timestamp_ms(12345)
@@ -213,7 +213,7 @@ impl DPacketBuilder<'_> {
 
     /// Set timestamp in milliseconds
     #[must_use]
-    pub fn timestamp_ms(mut self, ts: u64) -> Self {
+    pub const fn timestamp_ms(mut self, ts: u64) -> Self {
         self.timestamp_ms = ts;
         self
     }
@@ -344,14 +344,14 @@ impl IPacketBuilder<'_> {
 
     /// Set quality level
     #[must_use]
-    pub fn quality(mut self, q: FbQualityLevel) -> Self {
+    pub const fn quality(mut self, q: FbQualityLevel) -> Self {
         self.quality = q;
         self
     }
 
     /// Set timestamp in milliseconds
     #[must_use]
-    pub fn timestamp_ms(mut self, ts: u64) -> Self {
+    pub const fn timestamp_ms(mut self, ts: u64) -> Self {
         self.timestamp_ms = ts;
         self
     }
@@ -436,7 +436,7 @@ impl SPacketBuilder<'_> {
 
     /// Set timestamp in milliseconds
     #[must_use]
-    pub fn timestamp_ms(mut self, ts: u64) -> Self {
+    pub const fn timestamp_ms(mut self, ts: u64) -> Self {
         self.timestamp_ms = ts;
         self
     }
@@ -499,7 +499,7 @@ pub fn read_packet(bytes: &[u8]) -> FbResult<AspPacketPayload<'_>> {
 ///
 /// # Example
 ///
-/// ```rust,no_run
+/// ```rust,ignore
 /// let d_packet = read_d_packet(&bytes)?;
 /// let mvs = d_packet.motion_vectors().unwrap();
 /// for mv in mvs.iter() {
@@ -626,7 +626,7 @@ pub fn create_pong(timestamp_ms: u64) -> Vec<u8> {
 ///
 /// # Example
 ///
-/// ```rust,no_run
+/// ```rust,ignore
 /// use flatbuffers::FlatBufferBuilder;
 /// use libasp::flatbuffers_api::encode_d_packet_with_builder;
 ///

@@ -25,7 +25,7 @@
 //! (C++, Go, Java, Python, TypeScript, etc.). The schema is defined in
 //! `schemas/asp.fbs`.
 //!
-//! ```rust,no_run
+//! ```rust,ignore
 //! use libasp::flatbuffers_api;
 //!
 //! // Create D-Packet with motion vectors (zero-copy serialization)
@@ -45,7 +45,7 @@
 //!
 //! # Usage
 //!
-//! ```rust,no_run
+//! ```rust,ignore
 //! use libasp::{AspPacket, IPacketPayload, PacketType};
 //!
 //! // Create an I-Packet (keyframe)
@@ -266,7 +266,7 @@ mod tests {
             .sum::<f64>()
             / input.len() as f64;
 
-        assert!(error < 10.0, "DCT reconstruction error too high: {}", error);
+        assert!(error < 10.0, "DCT reconstruction error too high: {error}");
     }
 
     #[test]

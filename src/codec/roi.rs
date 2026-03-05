@@ -22,7 +22,7 @@ pub struct RoiRegion {
 impl RoiRegion {
     /// Create a new ROI region with default confidence and priority
     #[must_use]
-    pub fn new(bounds: Rect, roi_type: RoiType) -> Self {
+    pub const fn new(bounds: Rect, roi_type: RoiType) -> Self {
         Self {
             bounds,
             roi_type,
@@ -33,14 +33,14 @@ impl RoiRegion {
 
     /// Set the confidence score (clamped to 0.0-1.0)
     #[must_use]
-    pub fn with_confidence(mut self, confidence: f32) -> Self {
+    pub const fn with_confidence(mut self, confidence: f32) -> Self {
         self.confidence = confidence.clamp(0.0, 1.0);
         self
     }
 
     /// Set the priority level
     #[must_use]
-    pub fn with_priority(mut self, priority: u8) -> Self {
+    pub const fn with_priority(mut self, priority: u8) -> Self {
         self.priority = priority;
         self
     }
@@ -97,7 +97,7 @@ impl Default for RoiDetector {
 impl RoiDetector {
     /// Create a new ROI detector with the given configuration
     #[must_use]
-    pub fn new(config: RoiConfig) -> Self {
+    pub const fn new(config: RoiConfig) -> Self {
         Self { config }
     }
 
@@ -270,11 +270,10 @@ pub fn detect_rois(
 ) -> Vec<RoiRegion> {
     let detector = RoiDetector::new(config.clone());
 
-    if let Some(prev) = previous {
-        detector.detect_with_motion(current, prev, width, height)
-    } else {
-        detector.detect(current, width, height)
-    }
+    previous.map_or_else(
+        || detector.detect(current, width, height),
+        |prev| detector.detect_with_motion(current, prev, width, height),
+    )
 }
 
 /// Calculate edge strength using simplified Sobel operator
@@ -573,7 +572,7 @@ mod tests {
             ..Default::default()
         };
 
-        let detector = RoiDetector::new(config.clone());
+        let detector = RoiDetector::new(config);
         assert!(detector.config.detect_edges);
         assert!(!detector.config.detect_motion);
     }

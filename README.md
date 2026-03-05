@@ -538,7 +538,7 @@ All projects share the core philosophy: **encode the generation process, not the
 | **Tests** | 80 passed, 0 failures |
 | **clippy pedantic** | 0 warnings |
 | **cargo fmt** | clean |
-| **`#[must_use]`** | 296 annotations |
+| **`#[must_use]`** | 318 annotations |
 | **FlatBuffers** | cross-language (C++, Go, Java, Python, TypeScript) |
 
 ## Contributing

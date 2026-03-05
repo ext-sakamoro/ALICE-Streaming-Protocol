@@ -41,7 +41,7 @@ impl AspPacketHeader {
     /// Create a new packet header
     #[inline]
     #[must_use]
-    pub fn new(packet_type: PacketType, sequence: u32, payload_length: u32) -> Self {
+    pub const fn new(packet_type: PacketType, sequence: u32, payload_length: u32) -> Self {
         Self {
             version: ASP_VERSION,
             packet_type,
@@ -161,13 +161,13 @@ impl AspPacketHeader {
     /// Check if compression flag is set
     #[inline]
     #[must_use]
-    pub fn is_compressed(&self) -> bool {
+    pub const fn is_compressed(&self) -> bool {
         self.flags & 0x0001 != 0
     }
 
     /// Set compression flag
     #[inline]
-    pub fn set_compressed(&mut self, compressed: bool) {
+    pub const fn set_compressed(&mut self, compressed: bool) {
         if compressed {
             self.flags |= 0x0001;
         } else {
@@ -177,12 +177,12 @@ impl AspPacketHeader {
 
     /// Check if encryption flag is set
     #[must_use]
-    pub fn is_encrypted(&self) -> bool {
+    pub const fn is_encrypted(&self) -> bool {
         self.flags & 0x0002 != 0
     }
 
     /// Set encryption flag
-    pub fn set_encrypted(&mut self, encrypted: bool) {
+    pub const fn set_encrypted(&mut self, encrypted: bool) {
         if encrypted {
             self.flags |= 0x0002;
         } else {
@@ -192,12 +192,12 @@ impl AspPacketHeader {
 
     /// Check if FEC (Forward Error Correction) flag is set
     #[must_use]
-    pub fn has_fec(&self) -> bool {
+    pub const fn has_fec(&self) -> bool {
         self.flags & 0x0004 != 0
     }
 
     /// Set FEC flag
-    pub fn set_fec(&mut self, fec: bool) {
+    pub const fn set_fec(&mut self, fec: bool) {
         if fec {
             self.flags |= 0x0004;
         } else {
@@ -208,7 +208,7 @@ impl AspPacketHeader {
     /// Calculate total packet size (header + payload)
     #[inline]
     #[must_use]
-    pub fn total_size(&self) -> usize {
+    pub const fn total_size(&self) -> usize {
         Self::SIZE + self.payload_length as usize
     }
 }
@@ -376,7 +376,84 @@ mod tests {
                 header.write_to_ptr(buffer.as_mut_ptr());
             }
 
-            assert_eq!(buffer, expected, "Failed for {:?}", packet_type);
+            assert_eq!(buffer, expected, "Failed for {packet_type:?}");
         }
+    }
+
+    #[test]
+    fn test_header_default() {
+        let h = AspPacketHeader::default();
+        assert_eq!(h.packet_type, PacketType::DPacket);
+        assert_eq!(h.sequence, 0);
+        assert_eq!(h.payload_length, 0);
+        assert_eq!(h.flags, 0);
+    }
+
+    #[test]
+    fn test_is_keyframe_only_for_i_packet() {
+        assert!(AspPacketHeader::new(PacketType::IPacket, 0, 0).is_keyframe());
+        assert!(!AspPacketHeader::new(PacketType::DPacket, 0, 0).is_keyframe());
+        assert!(!AspPacketHeader::new(PacketType::CPacket, 0, 0).is_keyframe());
+        assert!(!AspPacketHeader::new(PacketType::SPacket, 0, 0).is_keyframe());
+    }
+
+    #[test]
+    fn test_flag_unset_after_set() {
+        let mut h = AspPacketHeader::new(PacketType::DPacket, 0, 0);
+        h.set_compressed(true);
+        assert!(h.is_compressed());
+        h.set_compressed(false);
+        assert!(!h.is_compressed());
+
+        h.set_encrypted(true);
+        assert!(h.is_encrypted());
+        h.set_encrypted(false);
+        assert!(!h.is_encrypted());
+
+        h.set_fec(true);
+        assert!(h.has_fec());
+        h.set_fec(false);
+        assert!(!h.has_fec());
+    }
+
+    #[test]
+    fn test_crc32_empty_input() {
+        // Same empty input must always produce the same result
+        let result = crc32(&[]);
+        assert_eq!(result, crc32(&[]));
+    }
+
+    #[test]
+    fn test_crc32_known_value() {
+        // CRC32/ISO-HDLC (Castagnoli) of "123456789" = 0xCBF43926
+        let checksum = crc32(b"123456789");
+        assert_eq!(
+            checksum, 0xCBF4_3926,
+            "CRC32 of '123456789' must be 0xCBF43926"
+        );
+    }
+
+    #[test]
+    fn test_verify_crc32() {
+        let data = b"ALICE streaming";
+        let checksum = crc32(data);
+        assert!(verify_crc32(data, checksum));
+        // Flip one bit in the checksum — must fail
+        assert!(!verify_crc32(data, checksum ^ 0x0000_0001));
+        // Corrupt one byte in the data — must fail
+        let mut bad = data.to_vec();
+        bad[0] ^= 0xFF;
+        assert!(!verify_crc32(&bad, checksum));
+    }
+
+    #[test]
+    fn test_header_sequence_big_endian_encoding() {
+        let header = AspPacketHeader::new(PacketType::IPacket, 0x0102_0304, 0);
+        let bytes = header.to_bytes();
+        // Sequence occupies bytes 8-11, big-endian
+        assert_eq!(bytes[8], 0x01);
+        assert_eq!(bytes[9], 0x02);
+        assert_eq!(bytes[10], 0x03);
+        assert_eq!(bytes[11], 0x04);
     }
 }

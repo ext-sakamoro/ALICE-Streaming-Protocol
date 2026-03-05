@@ -238,19 +238,19 @@ impl HybridTransmitter {
 
     /// Get current bandwidth statistics
     #[must_use]
-    pub fn stats(&self) -> &HybridBandwidthStats {
+    pub const fn stats(&self) -> &HybridBandwidthStats {
         &self.stats
     }
 
     /// Get current sequence number
     #[must_use]
-    pub fn sequence(&self) -> u32 {
+    pub const fn sequence(&self) -> u32 {
         self.sequence
     }
 
     /// Get current scene version
     #[must_use]
-    pub fn scene_version(&self) -> u32 {
+    pub const fn scene_version(&self) -> u32 {
         self.scene_version
     }
 }
@@ -280,7 +280,7 @@ pub struct HybridReceiver {
 impl HybridReceiver {
     /// Create a new hybrid receiver
     #[must_use]
-    pub fn new() -> Self {
+    pub const fn new() -> Self {
         Self {
             current_scene: None,
             scene_version: 0,
@@ -322,19 +322,19 @@ impl HybridReceiver {
 
     /// Get the current SDF scene (for rendering)
     #[must_use]
-    pub fn current_scene(&self) -> Option<&SdfSceneDescriptor> {
+    pub const fn current_scene(&self) -> Option<&SdfSceneDescriptor> {
         self.current_scene.as_ref()
     }
 
     /// Get the current person mask
     #[must_use]
-    pub fn current_mask(&self) -> Option<&PersonMask> {
+    pub const fn current_mask(&self) -> Option<&PersonMask> {
         self.current_mask.as_ref()
     }
 
     /// Frames received so far
     #[must_use]
-    pub fn frames_received(&self) -> u32 {
+    pub const fn frames_received(&self) -> u32 {
         self.frames_received
     }
 }
@@ -550,15 +550,15 @@ mod tests {
             1.0,   // 1 bpp wavelet
         );
 
-        assert!(savings > 70.0, "Should save >70%, got {:.1}%", savings);
-        assert!(ratio > 3.0, "Should compress >3x, got {:.1}x", ratio);
+        assert!(savings > 70.0, "Should save >70%, got {savings:.1}%");
+        assert!(ratio > 3.0, "Should compress >3x, got {ratio:.1}x");
     }
 
     #[test]
     fn test_create_person_mask() {
         let mut binary_mask = vec![0u8; 100];
-        for i in 30..70 {
-            binary_mask[i] = 1;
+        for val in &mut binary_mask[30..70] {
+            *val = 1;
         }
 
         let mask = create_person_mask(&binary_mask, 10, 10, [3, 3, 4, 4], 40);

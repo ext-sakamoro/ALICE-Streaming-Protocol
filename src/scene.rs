@@ -38,7 +38,7 @@ pub struct SdfSceneDescriptor {
 impl SdfSceneDescriptor {
     /// Create a new SDF scene descriptor from ASDF binary data
     #[must_use]
-    pub fn new(asdf_data: Vec<u8>) -> Self {
+    pub const fn new(asdf_data: Vec<u8>) -> Self {
         Self {
             asdf_data,
             bounds: [-10.0, -10.0, -10.0, 10.0, 10.0, 10.0],
@@ -52,21 +52,21 @@ impl SdfSceneDescriptor {
 
     /// Set scene bounds
     #[must_use]
-    pub fn with_bounds(mut self, min: [f32; 3], max: [f32; 3]) -> Self {
+    pub const fn with_bounds(mut self, min: [f32; 3], max: [f32; 3]) -> Self {
         self.bounds = [min[0], min[1], min[2], max[0], max[1], max[2]];
         self
     }
 
     /// Set fallback color
     #[must_use]
-    pub fn with_fallback_color(mut self, r: u8, g: u8, b: u8) -> Self {
+    pub const fn with_fallback_color(mut self, r: u8, g: u8, b: u8) -> Self {
         self.fallback_color = [r, g, b];
         self
     }
 
     /// Set render resolution hint
     #[must_use]
-    pub fn with_render_resolution(mut self, res: u32) -> Self {
+    pub const fn with_render_resolution(mut self, res: u32) -> Self {
         self.render_resolution = res;
         self
     }
@@ -80,7 +80,7 @@ impl SdfSceneDescriptor {
 
     /// Get ASDF data size in bytes
     #[must_use]
-    pub fn asdf_size(&self) -> usize {
+    pub const fn asdf_size(&self) -> usize {
         self.asdf_data.len()
     }
 
@@ -135,7 +135,7 @@ pub enum SdfDeltaType {
 impl SdfSceneDelta {
     /// Create an animation update delta
     #[must_use]
-    pub fn animation_update(ref_version: u32, data: Vec<u8>) -> Self {
+    pub const fn animation_update(ref_version: u32, data: Vec<u8>) -> Self {
         Self {
             ref_scene_version: ref_version,
             new_scene_version: ref_version + 1,
@@ -146,7 +146,7 @@ impl SdfSceneDelta {
 
     /// Create a node transform delta
     #[must_use]
-    pub fn node_transform(ref_version: u32, data: Vec<u8>) -> Self {
+    pub const fn node_transform(ref_version: u32, data: Vec<u8>) -> Self {
         Self {
             ref_scene_version: ref_version,
             new_scene_version: ref_version + 1,
@@ -157,7 +157,7 @@ impl SdfSceneDelta {
 
     /// Create a full scene replacement delta
     #[must_use]
-    pub fn full_replace(ref_version: u32, asdf_data: Vec<u8>) -> Self {
+    pub const fn full_replace(ref_version: u32, asdf_data: Vec<u8>) -> Self {
         Self {
             ref_scene_version: ref_version,
             new_scene_version: ref_version + 1,
@@ -168,7 +168,7 @@ impl SdfSceneDelta {
 
     /// Create an SVO chunk delta (from edge device 3D scanner)
     #[must_use]
-    pub fn svo_chunk_delta(ref_version: u32, chunk_data: Vec<u8>) -> Self {
+    pub const fn svo_chunk_delta(ref_version: u32, chunk_data: Vec<u8>) -> Self {
         Self {
             ref_scene_version: ref_version,
             new_scene_version: ref_version + 1,
@@ -179,7 +179,7 @@ impl SdfSceneDelta {
 
     /// Get delta payload size in bytes
     #[must_use]
-    pub fn delta_size(&self) -> usize {
+    pub const fn delta_size(&self) -> usize {
         self.delta_data.len()
     }
 }
@@ -206,7 +206,7 @@ pub struct PersonMask {
 impl PersonMask {
     /// Create a new person mask
     #[must_use]
-    pub fn new(bbox: [u32; 4], rle_mask: Vec<u8>) -> Self {
+    pub const fn new(bbox: [u32; 4], rle_mask: Vec<u8>) -> Self {
         Self {
             bbox,
             rle_mask,
@@ -239,7 +239,7 @@ impl PersonMask {
 
     /// RLE mask size in bytes
     #[must_use]
-    pub fn mask_size(&self) -> usize {
+    pub const fn mask_size(&self) -> usize {
         self.rle_mask.len()
     }
 }
@@ -428,8 +428,8 @@ mod tests {
         let width = 10u32;
         let height = 4u32;
         let mut mask = vec![0u8; 40];
-        for i in 10..30 {
-            mask[i] = 1;
+        for val in &mut mask[10..30] {
+            *val = 1;
         }
 
         let rle = rle_encode_mask(&mask, width, height);

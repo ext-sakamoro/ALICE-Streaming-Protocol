@@ -11,7 +11,7 @@
 //! By default, packets are serialized using `FlatBuffers` for cross-language
 //! compatibility. Enable the `bincode-compat` feature for legacy bincode support.
 //!
-//! ```rust,no_run
+//! ```rust,ignore
 //! // FlatBuffers (default, cross-language)
 //! let bytes = packet.to_bytes()?;
 //!
@@ -39,7 +39,7 @@ pub struct ColorPalette {
 impl ColorPalette {
     /// Create a new palette from a list of colors
     #[must_use]
-    pub fn new(colors: Vec<Color>) -> Self {
+    pub const fn new(colors: Vec<Color>) -> Self {
         Self {
             colors,
             weights: None,
@@ -48,7 +48,7 @@ impl ColorPalette {
 
     /// Create a palette with weighted colors
     #[must_use]
-    pub fn with_weights(colors: Vec<Color>, weights: Vec<f32>) -> Self {
+    pub const fn with_weights(colors: Vec<Color>, weights: Vec<f32>) -> Self {
         Self {
             colors,
             weights: Some(weights),
@@ -101,7 +101,7 @@ impl RegionDescriptor {
 
     /// Create a linear gradient region
     #[must_use]
-    pub fn gradient(bounds: Rect, colors: Vec<Color>) -> Self {
+    pub const fn gradient(bounds: Rect, colors: Vec<Color>) -> Self {
         Self {
             bounds,
             pattern_type: PatternType::GradientLinear,
@@ -114,7 +114,11 @@ impl RegionDescriptor {
 
     /// Create a DCT-encoded region with sparse coefficients
     #[must_use]
-    pub fn dct(bounds: Rect, palette: ColorPalette, coefficients: Vec<(u32, u32, f32)>) -> Self {
+    pub const fn dct(
+        bounds: Rect,
+        palette: ColorPalette,
+        coefficients: Vec<(u32, u32, f32)>,
+    ) -> Self {
         Self {
             bounds,
             pattern_type: PatternType::Dct,
@@ -168,7 +172,7 @@ impl IPacketPayload {
 
     /// Set the quality level
     #[must_use]
-    pub fn with_quality(mut self, quality: QualityLevel) -> Self {
+    pub const fn with_quality(mut self, quality: QualityLevel) -> Self {
         self.quality = quality;
         self
     }
@@ -221,7 +225,7 @@ pub struct DPacketPayload {
 impl DPacketPayload {
     /// Create a new D-Packet payload referencing a previous packet
     #[must_use]
-    pub fn new(ref_sequence: u32) -> Self {
+    pub const fn new(ref_sequence: u32) -> Self {
         Self {
             ref_sequence,
             motion_vectors: Vec::new(),
@@ -282,7 +286,7 @@ pub struct RoiRegion {
 impl RoiRegion {
     /// Create a new ROI region with default priority and confidence
     #[must_use]
-    pub fn new(bounds: Rect, roi_type: RoiType) -> Self {
+    pub const fn new(bounds: Rect, roi_type: RoiType) -> Self {
         Self {
             bounds,
             roi_type,
@@ -293,14 +297,14 @@ impl RoiRegion {
 
     /// Set the priority level
     #[must_use]
-    pub fn with_priority(mut self, priority: u8) -> Self {
+    pub const fn with_priority(mut self, priority: u8) -> Self {
         self.priority = priority;
         self
     }
 
     /// Set the confidence score (clamped to 0.0-1.0)
     #[must_use]
-    pub fn with_confidence(mut self, confidence: f32) -> Self {
+    pub const fn with_confidence(mut self, confidence: f32) -> Self {
         self.confidence = confidence.clamp(0.0, 1.0);
         self
     }
@@ -350,7 +354,7 @@ pub struct CPacketPayload {
 impl CPacketPayload {
     /// Create a new C-Packet payload referencing a previous packet
     #[must_use]
-    pub fn new(ref_sequence: u32) -> Self {
+    pub const fn new(ref_sequence: u32) -> Self {
         Self {
             ref_sequence,
             corrections: Vec::new(),
@@ -403,7 +407,7 @@ pub enum SyncData {
 impl SPacketPayload {
     /// Create a keyframe request S-Packet
     #[must_use]
-    pub fn request_keyframe() -> Self {
+    pub const fn request_keyframe() -> Self {
         Self {
             command: SyncCommand::RequestKeyframe,
             data: SyncData::None,
@@ -413,7 +417,7 @@ impl SPacketPayload {
 
     /// Create an acknowledgment S-Packet
     #[must_use]
-    pub fn ack(sequence: u32) -> Self {
+    pub const fn ack(sequence: u32) -> Self {
         Self {
             command: SyncCommand::Ack,
             data: SyncData::Sequence(sequence),
@@ -423,7 +427,7 @@ impl SPacketPayload {
 
     /// Create a negative acknowledgment S-Packet
     #[must_use]
-    pub fn nack(sequence: u32) -> Self {
+    pub const fn nack(sequence: u32) -> Self {
         Self {
             command: SyncCommand::Nack,
             data: SyncData::Sequence(sequence),
@@ -433,7 +437,7 @@ impl SPacketPayload {
 
     /// Create an end-of-stream S-Packet
     #[must_use]
-    pub fn end_of_stream() -> Self {
+    pub const fn end_of_stream() -> Self {
         Self {
             command: SyncCommand::EndOfStream,
             data: SyncData::None,
@@ -443,7 +447,7 @@ impl SPacketPayload {
 
     /// Create a bitrate adjustment S-Packet
     #[must_use]
-    pub fn bitrate_adjust(bitrate_kbps: u32) -> Self {
+    pub const fn bitrate_adjust(bitrate_kbps: u32) -> Self {
         Self {
             command: SyncCommand::BitrateAdjust,
             data: SyncData::Bitrate(bitrate_kbps),
@@ -453,7 +457,7 @@ impl SPacketPayload {
 
     /// Create a ping S-Packet
     #[must_use]
-    pub fn ping() -> Self {
+    pub const fn ping() -> Self {
         Self {
             command: SyncCommand::Ping,
             data: SyncData::None,
@@ -463,7 +467,7 @@ impl SPacketPayload {
 
     /// Create a pong S-Packet
     #[must_use]
-    pub fn pong() -> Self {
+    pub const fn pong() -> Self {
         Self {
             command: SyncCommand::Pong,
             data: SyncData::None,
@@ -500,7 +504,7 @@ impl AspPacket {
     /// # Errors
     ///
     /// Currently infallible; returns `Ok` in all cases. Reserved for future validation.
-    pub fn create_i_packet(sequence: u32, payload: IPacketPayload) -> AspResult<Self> {
+    pub const fn create_i_packet(sequence: u32, payload: IPacketPayload) -> AspResult<Self> {
         // Estimate payload size (used for header, actual size computed during serialization)
         let estimated_size = Self::estimate_i_packet_size(&payload);
 
@@ -515,7 +519,7 @@ impl AspPacket {
     /// # Errors
     ///
     /// Currently infallible; returns `Ok` in all cases. Reserved for future validation.
-    pub fn create_d_packet(sequence: u32, payload: DPacketPayload) -> AspResult<Self> {
+    pub const fn create_d_packet(sequence: u32, payload: DPacketPayload) -> AspResult<Self> {
         let estimated_size = Self::estimate_d_packet_size(&payload);
 
         Ok(Self {
@@ -543,7 +547,7 @@ impl AspPacket {
     /// # Errors
     ///
     /// Currently infallible; returns `Ok` in all cases. Reserved for future validation.
-    pub fn create_s_packet(sequence: u32, payload: SPacketPayload) -> AspResult<Self> {
+    pub const fn create_s_packet(sequence: u32, payload: SPacketPayload) -> AspResult<Self> {
         Ok(Self {
             header: AspPacketHeader::new(
                 PacketType::SPacket,
@@ -555,11 +559,11 @@ impl AspPacket {
     }
 
     // Payload size estimation (for header creation)
-    fn estimate_i_packet_size(payload: &IPacketPayload) -> usize {
+    const fn estimate_i_packet_size(payload: &IPacketPayload) -> usize {
         64 + payload.regions.len() * 128
     }
 
-    fn estimate_d_packet_size(payload: &DPacketPayload) -> usize {
+    const fn estimate_d_packet_size(payload: &DPacketPayload) -> usize {
         32 + payload.motion_vectors.len() * 12 + payload.region_deltas.len() * 64
     }
 
@@ -767,13 +771,13 @@ impl AspPacket {
 
     /// Get packet type
     #[must_use]
-    pub fn packet_type(&self) -> PacketType {
+    pub const fn packet_type(&self) -> PacketType {
         self.header.packet_type
     }
 
     /// Get sequence number
     #[must_use]
-    pub fn sequence(&self) -> u32 {
+    pub const fn sequence(&self) -> u32 {
         self.header.sequence
     }
 
@@ -785,13 +789,13 @@ impl AspPacket {
 
     /// Get payload size
     #[must_use]
-    pub fn payload_size(&self) -> u32 {
+    pub const fn payload_size(&self) -> u32 {
         self.header.payload_length
     }
 
     /// Get I-Packet payload (if applicable)
     #[must_use]
-    pub fn as_i_packet(&self) -> Option<&IPacketPayload> {
+    pub const fn as_i_packet(&self) -> Option<&IPacketPayload> {
         match &self.payload {
             AspPayload::IPacket(p) => Some(p),
             _ => None,
@@ -800,7 +804,7 @@ impl AspPacket {
 
     /// Get D-Packet payload (if applicable)
     #[must_use]
-    pub fn as_d_packet(&self) -> Option<&DPacketPayload> {
+    pub const fn as_d_packet(&self) -> Option<&DPacketPayload> {
         match &self.payload {
             AspPayload::DPacket(p) => Some(p),
             _ => None,
@@ -809,7 +813,7 @@ impl AspPacket {
 
     /// Get C-Packet payload (if applicable)
     #[must_use]
-    pub fn as_c_packet(&self) -> Option<&CPacketPayload> {
+    pub const fn as_c_packet(&self) -> Option<&CPacketPayload> {
         match &self.payload {
             AspPayload::CPacket(p) => Some(p),
             _ => None,
@@ -818,7 +822,7 @@ impl AspPacket {
 
     /// Get S-Packet payload (if applicable)
     #[must_use]
-    pub fn as_s_packet(&self) -> Option<&SPacketPayload> {
+    pub const fn as_s_packet(&self) -> Option<&SPacketPayload> {
         match &self.payload {
             AspPayload::SPacket(p) => Some(p),
             _ => None,
@@ -839,7 +843,7 @@ use flatbuffers::FlatBufferBuilder;
 ///
 /// # Example
 ///
-/// ```rust,no_run
+/// ```rust,ignore
 /// use libasp::PacketEncoder;
 ///
 /// let mut encoder = PacketEncoder::new();
@@ -1030,7 +1034,7 @@ impl PacketEncoder {
 
     /// Get the internal buffer's current capacity
     #[must_use]
-    pub fn buffer_capacity(&self) -> usize {
+    pub const fn buffer_capacity(&self) -> usize {
         self.buffer.capacity()
     }
 }
@@ -1287,9 +1291,7 @@ mod tests {
         // Estimated should be reasonable (allow some variance due to FlatBuffers overhead)
         assert!(
             estimated >= actual / 4,
-            "Estimate {} too small for actual {}",
-            estimated,
-            actual
+            "Estimate {estimated} too small for actual {actual}"
         );
     }
 

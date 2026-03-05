@@ -4,6 +4,7 @@ use criterion::{black_box, criterion_group, criterion_main, BenchmarkId, Criteri
 use libasp::codec::motion::{estimate_motion, estimate_motion_parallel, SearchAlgorithm};
 
 fn create_test_frames(width: usize, height: usize) -> (Vec<u8>, Vec<u8>) {
+    #[allow(clippy::cast_possible_truncation)]
     let current: Vec<u8> = (0..width * height).map(|i| (i % 256) as u8).collect();
     let mut previous = current.clone();
 
@@ -22,11 +23,13 @@ fn create_test_frames(width: usize, height: usize) -> (Vec<u8>, Vec<u8>) {
 fn bench_motion_estimation(c: &mut Criterion) {
     let mut group = c.benchmark_group("motion_estimation");
 
-    for size in [256, 512, 1024].iter() {
+    for size in &[256, 512, 1024] {
         let (current, previous) = create_test_frames(*size, *size);
 
         group.bench_with_input(BenchmarkId::new("single_thread", size), size, |b, &size| {
-            b.iter(|| estimate_motion(black_box(&current), black_box(&previous), size, size, 16, 8))
+            b.iter(|| {
+                estimate_motion(black_box(&current), black_box(&previous), size, size, 16, 8)
+            });
         });
 
         group.bench_with_input(
@@ -44,7 +47,7 @@ fn bench_motion_estimation(c: &mut Criterion) {
                         SearchAlgorithm::DiamondSearch,
                         256,
                     )
-                })
+                });
             },
         );
 
@@ -63,7 +66,7 @@ fn bench_motion_estimation(c: &mut Criterion) {
                         SearchAlgorithm::HexagonSearch,
                         256,
                     )
-                })
+                });
             },
         );
     }
@@ -86,7 +89,7 @@ fn bench_hd_frame(c: &mut Criterion) {
                 SearchAlgorithm::DiamondSearch,
                 256,
             )
-        })
+        });
     });
 }
 

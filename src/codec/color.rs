@@ -42,14 +42,14 @@ impl ColorExtractor {
 
     /// Set maximum k-means iterations
     #[must_use]
-    pub fn with_iterations(mut self, iterations: usize) -> Self {
+    pub const fn with_iterations(mut self, iterations: usize) -> Self {
         self.max_iterations = iterations;
         self
     }
 
     /// Set pixel sampling rate (0.01-1.0)
     #[must_use]
-    pub fn with_sampling_rate(mut self, rate: f64) -> Self {
+    pub const fn with_sampling_rate(mut self, rate: f64) -> Self {
         self.sampling_rate = rate.clamp(0.01, 1.0);
         self
     }
@@ -283,7 +283,7 @@ fn color_distance_sq(pixel: &[u8; 3], color: &Color) -> f64 {
     let dr = pixel[0] as f64 - color.r as f64;
     let dg = pixel[1] as f64 - color.g as f64;
     let db = pixel[2] as f64 - color.b as f64;
-    dr * dr + dg * dg + db * db
+    db.mul_add(db, dr.mul_add(dr, dg * dg))
 }
 
 /// Reduce color palette using median cut algorithm (alternative to k-means)

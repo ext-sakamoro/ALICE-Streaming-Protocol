@@ -39,10 +39,10 @@ impl TryFrom<u8> for PacketType {
 
     fn try_from(value: u8) -> Result<Self, Self::Error> {
         match value {
-            0x01 => Ok(PacketType::IPacket),
-            0x02 => Ok(PacketType::DPacket),
-            0x03 => Ok(PacketType::CPacket),
-            0x04 => Ok(PacketType::SPacket),
+            0x01 => Ok(Self::IPacket),
+            0x02 => Ok(Self::DPacket),
+            0x03 => Ok(Self::CPacket),
+            0x04 => Ok(Self::SPacket),
             _ => Err(AspError::InvalidPacketType(value)),
         }
     }
@@ -76,14 +76,14 @@ impl TryFrom<u8> for PatternType {
 
     fn try_from(value: u8) -> Result<Self, Self::Error> {
         match value {
-            0x00 => Ok(PatternType::Solid),
-            0x01 => Ok(PatternType::GradientLinear),
-            0x02 => Ok(PatternType::GradientRadial),
-            0x03 => Ok(PatternType::Noise),
-            0x04 => Ok(PatternType::Texture),
-            0x05 => Ok(PatternType::Dct),
-            0x06 => Ok(PatternType::Periodic),
-            0x07 => Ok(PatternType::Complex),
+            0x00 => Ok(Self::Solid),
+            0x01 => Ok(Self::GradientLinear),
+            0x02 => Ok(Self::GradientRadial),
+            0x03 => Ok(Self::Noise),
+            0x04 => Ok(Self::Texture),
+            0x05 => Ok(Self::Dct),
+            0x06 => Ok(Self::Periodic),
+            0x07 => Ok(Self::Complex),
             _ => Err(AspError::InvalidPatternType(value)),
         }
     }
@@ -113,12 +113,12 @@ impl TryFrom<u8> for MotionType {
 
     fn try_from(value: u8) -> Result<Self, Self::Error> {
         match value {
-            0x00 => Ok(MotionType::None),
-            0x01 => Ok(MotionType::Linear),
-            0x02 => Ok(MotionType::Easing),
-            0x03 => Ok(MotionType::Oscillate),
-            0x04 => Ok(MotionType::Path),
-            0x05 => Ok(MotionType::Physics),
+            0x00 => Ok(Self::None),
+            0x01 => Ok(Self::Linear),
+            0x02 => Ok(Self::Easing),
+            0x03 => Ok(Self::Oscillate),
+            0x04 => Ok(Self::Path),
+            0x05 => Ok(Self::Physics),
             _ => Err(AspError::InvalidMotionType(value)),
         }
     }
@@ -148,12 +148,12 @@ impl TryFrom<u8> for RoiType {
 
     fn try_from(value: u8) -> Result<Self, Self::Error> {
         match value {
-            0x00 => Ok(RoiType::General),
-            0x01 => Ok(RoiType::Face),
-            0x02 => Ok(RoiType::Text),
-            0x03 => Ok(RoiType::Edge),
-            0x04 => Ok(RoiType::Motion),
-            0x05 => Ok(RoiType::Custom),
+            0x00 => Ok(Self::General),
+            0x01 => Ok(Self::Face),
+            0x02 => Ok(Self::Text),
+            0x03 => Ok(Self::Edge),
+            0x04 => Ok(Self::Motion),
+            0x05 => Ok(Self::Custom),
             _ => Err(AspError::InvalidRoiType(value)),
         }
     }
@@ -181,10 +181,10 @@ impl TryFrom<u8> for QualityLevel {
 
     fn try_from(value: u8) -> Result<Self, Self::Error> {
         match value {
-            0x00 => Ok(QualityLevel::Low),
-            0x01 => Ok(QualityLevel::Medium),
-            0x02 => Ok(QualityLevel::High),
-            0x03 => Ok(QualityLevel::Ultra),
+            0x00 => Ok(Self::Low),
+            0x01 => Ok(Self::Medium),
+            0x02 => Ok(Self::High),
+            0x03 => Ok(Self::Ultra),
             _ => Err(AspError::InvalidQualityLevel(value)),
         }
     }
@@ -217,14 +217,14 @@ impl TryFrom<u8> for SyncCommand {
 
     fn try_from(value: u8) -> Result<Self, Self::Error> {
         match value {
-            0x01 => Ok(SyncCommand::RequestKeyframe),
-            0x02 => Ok(SyncCommand::Ack),
-            0x03 => Ok(SyncCommand::Nack),
-            0x04 => Ok(SyncCommand::EndOfStream),
-            0x05 => Ok(SyncCommand::BitrateAdjust),
-            0x06 => Ok(SyncCommand::QualityChange),
-            0x07 => Ok(SyncCommand::Ping),
-            0x08 => Ok(SyncCommand::Pong),
+            0x01 => Ok(Self::RequestKeyframe),
+            0x02 => Ok(Self::Ack),
+            0x03 => Ok(Self::Nack),
+            0x04 => Ok(Self::EndOfStream),
+            0x05 => Ok(Self::BitrateAdjust),
+            0x06 => Ok(Self::QualityChange),
+            0x07 => Ok(Self::Ping),
+            0x08 => Ok(Self::Pong),
             _ => Err(AspError::InvalidSyncCommand(value)),
         }
     }
@@ -358,20 +358,23 @@ impl Color {
 
     /// Convert to RGB array
     #[must_use]
-    pub fn to_array(self) -> [u8; 3] {
+    pub const fn to_array(self) -> [u8; 3] {
         [self.r, self.g, self.b]
     }
 
     /// Create from RGB array
     #[must_use]
-    pub fn from_array(arr: [u8; 3]) -> Self {
+    pub const fn from_array(arr: [u8; 3]) -> Self {
         Self::new(arr[0], arr[1], arr[2])
     }
 
     /// Calculate luminance (Y component in YUV)
     #[must_use]
     pub fn luminance(self) -> f32 {
-        0.299 * self.r as f32 + 0.587 * self.g as f32 + 0.114 * self.b as f32
+        0.114f32.mul_add(
+            self.b as f32,
+            0.299f32.mul_add(self.r as f32, 0.587 * self.g as f32),
+        )
     }
 }
 
@@ -425,19 +428,19 @@ impl Rect {
 
     /// Calculate area in pixels
     #[must_use]
-    pub fn area(&self) -> u64 {
+    pub const fn area(&self) -> u64 {
         self.width as u64 * self.height as u64
     }
 
     /// Check if a point is inside the rectangle
     #[must_use]
-    pub fn contains(&self, x: u32, y: u32) -> bool {
+    pub const fn contains(&self, x: u32, y: u32) -> bool {
         x >= self.x && x < self.x + self.width && y >= self.y && y < self.y + self.height
     }
 
     /// Check if this rectangle intersects with another
     #[must_use]
-    pub fn intersects(&self, other: &Rect) -> bool {
+    pub const fn intersects(&self, other: &Self) -> bool {
         self.x < other.x + other.width
             && self.x + self.width > other.x
             && self.y < other.y + other.height
@@ -450,7 +453,7 @@ impl Rect {
 /// Layout: [`block_x`: u16, `block_y`: u16, dx: i16, dy: i16, sad: u32, _pad: u32]
 /// For 4K video (3840x2160), 16x16 blocks = 240x135 = 32,400 blocks
 /// u16 range (0-65535) is sufficient for block indices.
-#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize, Default)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
 #[repr(C)]
 pub struct MotionVector {
     /// Block X position (u16: supports up to 65535 blocks = 1M+ pixels at 16px blocks)
@@ -500,7 +503,7 @@ impl MotionVector {
     /// Check if this is a zero motion vector
     #[inline]
     #[must_use]
-    pub fn is_zero(&self) -> bool {
+    pub const fn is_zero(&self) -> bool {
         self.dx == 0 && self.dy == 0
     }
 
@@ -508,13 +511,13 @@ impl MotionVector {
     #[inline]
     #[must_use]
     pub fn magnitude(&self) -> f32 {
-        ((self.dx as f32).powi(2) + (self.dy as f32).powi(2)).sqrt()
+        (self.dx as f32).hypot(self.dy as f32)
     }
 
     /// Convert to compact format (for bandwidth optimization)
     #[inline]
     #[must_use]
-    pub fn to_compact(&self) -> Option<MotionVectorCompact> {
+    pub const fn to_compact(&self) -> Option<MotionVectorCompact> {
         // Only convert if dx/dy fit in i8 range
         if self.dx >= -128 && self.dx <= 127 && self.dy >= -128 && self.dy <= 127 {
             Some(MotionVectorCompact {
@@ -559,14 +562,14 @@ impl MotionVectorCompact {
     /// Check if this is a zero motion vector
     #[inline]
     #[must_use]
-    pub fn is_zero(&self) -> bool {
+    pub const fn is_zero(&self) -> bool {
         self.dx == 0 && self.dy == 0
     }
 
     /// Expand to full `MotionVector` with block position and SAD
     #[inline]
     #[must_use]
-    pub fn expand(self, block_x: u16, block_y: u16, sad: u32) -> MotionVector {
+    pub const fn expand(self, block_x: u16, block_y: u16, sad: u32) -> MotionVector {
         MotionVector {
             block_x,
             block_y,
@@ -662,7 +665,7 @@ impl StreamStats {
     }
 
     /// Record a sent packet in the statistics
-    pub fn update_packet(&mut self, packet_type: PacketType, size: usize) {
+    pub const fn update_packet(&mut self, packet_type: PacketType, size: usize) {
         self.total_bytes += size as u64;
         self.total_packets += 1;
         match packet_type {
@@ -727,5 +730,220 @@ mod tests {
         assert_eq!(mv.dx, -5);
         assert_eq!(mv.dy, 10);
         assert_eq!(mv.sad, 500);
+    }
+
+    #[test]
+    fn test_color_to_from_array_roundtrip() {
+        let c = Color::new(10, 128, 255);
+        let arr = c.to_array();
+        assert_eq!(arr, [10, 128, 255]);
+        let restored = Color::from_array(arr);
+        assert_eq!(restored, c);
+    }
+
+    #[test]
+    fn test_color_luminance_channels() {
+        // Pure green has highest weight (0.587)
+        let green = Color::new(0, 255, 0);
+        let lum = green.luminance();
+        assert!(
+            255.0f32.mul_add(-0.587, lum).abs() < 0.5,
+            "green lum = {lum}"
+        );
+        // Pure blue has lowest weight (0.114)
+        let blue = Color::new(0, 0, 255);
+        let blue_lum = blue.luminance();
+        assert!(
+            255.0f32.mul_add(-0.114, blue_lum).abs() < 0.5,
+            "blue lum = {blue_lum}"
+        );
+    }
+
+    #[test]
+    fn test_rect_intersects_non_overlapping() {
+        let r1 = Rect::new(0, 0, 10, 10);
+        let r2 = Rect::new(20, 20, 10, 10);
+        assert!(!r1.intersects(&r2));
+        assert!(!r2.intersects(&r1));
+    }
+
+    #[test]
+    fn test_rect_intersects_adjacent_no_overlap() {
+        // Touching at right edge — open interval means no intersection
+        let r1 = Rect::new(0, 0, 10, 10);
+        let r2 = Rect::new(10, 0, 10, 10);
+        assert!(!r1.intersects(&r2));
+    }
+
+    #[test]
+    fn test_rect_contains_boundary() {
+        let r = Rect::new(5, 5, 10, 10);
+        assert!(r.contains(5, 5)); // top-left included
+        assert!(!r.contains(15, 5)); // right boundary exclusive
+        assert!(!r.contains(5, 15)); // bottom boundary exclusive
+        assert!(!r.contains(4, 5)); // one pixel left of rect
+    }
+
+    #[test]
+    fn test_rect_zero_area() {
+        let r = Rect::new(0, 0, 0, 5);
+        assert_eq!(r.area(), 0);
+    }
+
+    #[test]
+    fn test_motion_vector_compact_roundtrip() {
+        let mv = MotionVector::new(3, 7, 50, -30, 999);
+        let compact = mv.to_compact().expect("should fit in i8 range");
+        assert_eq!(compact.dx, 50);
+        assert_eq!(compact.dy, -30);
+
+        let expanded = compact.expand(3, 7, 999);
+        assert_eq!(expanded.block_x, 3);
+        assert_eq!(expanded.block_y, 7);
+        assert_eq!(expanded.dx, 50);
+        assert_eq!(expanded.dy, -30);
+        assert_eq!(expanded.sad, 999);
+    }
+
+    #[test]
+    fn test_motion_vector_compact_out_of_range() {
+        // dx = 200 > 127, cannot be stored in i8
+        let mv = MotionVector::new(0, 0, 200, 0, 0);
+        assert!(mv.to_compact().is_none());
+
+        let mv_neg = MotionVector::new(0, 0, 0, -200, 0);
+        assert!(mv_neg.to_compact().is_none());
+    }
+
+    #[test]
+    fn test_motion_vector_compact_zero() {
+        let c = MotionVectorCompact::zero();
+        assert!(c.is_zero());
+        let c2 = MotionVectorCompact::new(1, 0);
+        assert!(!c2.is_zero());
+    }
+
+    #[test]
+    fn test_quality_level_ordering() {
+        assert!(QualityLevel::Low < QualityLevel::Medium);
+        assert!(QualityLevel::Medium < QualityLevel::High);
+        assert!(QualityLevel::High < QualityLevel::Ultra);
+    }
+
+    #[test]
+    fn test_quality_level_try_from() {
+        assert_eq!(QualityLevel::try_from(0).unwrap(), QualityLevel::Low);
+        assert_eq!(QualityLevel::try_from(3).unwrap(), QualityLevel::Ultra);
+        assert!(QualityLevel::try_from(4).is_err());
+    }
+
+    #[test]
+    fn test_pattern_type_try_from_all() {
+        for (byte, expected) in [
+            (0x00, PatternType::Solid),
+            (0x01, PatternType::GradientLinear),
+            (0x02, PatternType::GradientRadial),
+            (0x03, PatternType::Noise),
+            (0x04, PatternType::Texture),
+            (0x05, PatternType::Dct),
+            (0x06, PatternType::Periodic),
+            (0x07, PatternType::Complex),
+        ] {
+            assert_eq!(PatternType::try_from(byte).unwrap(), expected);
+        }
+        assert!(PatternType::try_from(0x08).is_err());
+    }
+
+    #[test]
+    fn test_motion_type_try_from_all() {
+        for (byte, expected) in [
+            (0x00, MotionType::None),
+            (0x01, MotionType::Linear),
+            (0x02, MotionType::Easing),
+            (0x03, MotionType::Oscillate),
+            (0x04, MotionType::Path),
+            (0x05, MotionType::Physics),
+        ] {
+            assert_eq!(MotionType::try_from(byte).unwrap(), expected);
+        }
+        assert!(MotionType::try_from(0x06).is_err());
+    }
+
+    #[test]
+    fn test_roi_type_try_from_all() {
+        for (byte, expected) in [
+            (0x00, RoiType::General),
+            (0x01, RoiType::Face),
+            (0x02, RoiType::Text),
+            (0x03, RoiType::Edge),
+            (0x04, RoiType::Motion),
+            (0x05, RoiType::Custom),
+        ] {
+            assert_eq!(RoiType::try_from(byte).unwrap(), expected);
+        }
+        assert!(RoiType::try_from(0x06).is_err());
+    }
+
+    #[test]
+    fn test_sync_command_try_from_all() {
+        for (byte, expected) in [
+            (0x01, SyncCommand::RequestKeyframe),
+            (0x02, SyncCommand::Ack),
+            (0x03, SyncCommand::Nack),
+            (0x04, SyncCommand::EndOfStream),
+            (0x05, SyncCommand::BitrateAdjust),
+            (0x06, SyncCommand::QualityChange),
+            (0x07, SyncCommand::Ping),
+            (0x08, SyncCommand::Pong),
+        ] {
+            assert_eq!(SyncCommand::try_from(byte).unwrap(), expected);
+        }
+        assert!(SyncCommand::try_from(0x00).is_err());
+        assert!(SyncCommand::try_from(0x09).is_err());
+    }
+
+    #[test]
+    fn test_stream_stats_update_packet() {
+        let mut stats = StreamStats::new();
+        stats.update_packet(PacketType::IPacket, 1000);
+        stats.update_packet(PacketType::DPacket, 200);
+        stats.update_packet(PacketType::DPacket, 300);
+        stats.update_packet(PacketType::CPacket, 50);
+        stats.update_packet(PacketType::SPacket, 16);
+
+        assert_eq!(stats.total_bytes, 1566);
+        assert_eq!(stats.total_packets, 5);
+        assert_eq!(stats.i_packets, 1);
+        assert_eq!(stats.d_packets, 2);
+        assert_eq!(stats.c_packets, 1);
+        assert_eq!(stats.s_packets, 1);
+    }
+
+    #[test]
+    fn test_point_new_and_origin() {
+        let p = Point::origin();
+        assert_eq!(p.x, 0);
+        assert_eq!(p.y, 0);
+        let p2 = Point::new(-5, 10);
+        assert_eq!(p2.x, -5);
+        assert_eq!(p2.y, 10);
+    }
+
+    #[test]
+    fn test_asp_error_display() {
+        let err = AspError::InvalidPacketType(0xAB);
+        let msg = err.to_string();
+        // The number 171 (== 0xAB) should appear in the message
+        assert!(msg.contains("171"), "Expected '171' in '{msg}'");
+
+        let err2 = AspError::ChecksumMismatch {
+            expected: 0xDEAD_BEEF,
+            got: 0x1234_5678,
+        };
+        let msg2 = err2.to_string();
+        assert!(
+            msg2.contains("deadbeef") || msg2.contains("DEADBEEF"),
+            "Expected hex in '{msg2}'"
+        );
     }
 }

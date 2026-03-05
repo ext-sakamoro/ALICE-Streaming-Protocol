@@ -59,7 +59,7 @@ impl MotionEstimator {
 
     /// Set the search algorithm
     #[must_use]
-    pub fn with_algorithm(mut self, algorithm: SearchAlgorithm) -> Self {
+    pub const fn with_algorithm(mut self, algorithm: SearchAlgorithm) -> Self {
         self.algorithm = algorithm;
         self
     }
@@ -667,5 +667,74 @@ mod tests {
         assert_eq!(estimator.block_size, 8);
         assert_eq!(estimator.search_range, 16);
         assert_eq!(estimator.algorithm, SearchAlgorithm::HexagonSearch);
+    }
+
+    #[test]
+    fn test_sad_8x8_scalar_known_value() {
+        // All source = 200, all ref = 180 → diff = 20 per pixel × 64 pixels = 1280
+        let src = vec![200u8; 128];
+        let ref_block = vec![180u8; 128];
+        let sad = sad_8x8_scalar(&src, 8, &ref_block, 8);
+        assert_eq!(sad, 64 * 20);
+    }
+
+    #[test]
+    fn test_sad_8x8_scalar_identical_blocks() {
+        let block = vec![128u8; 128];
+        let sad = sad_8x8_scalar(&block, 8, &block, 8);
+        assert_eq!(sad, 0);
+    }
+
+    #[test]
+    fn test_motion_estimator_estimate_wrapper() {
+        let estimator = MotionEstimator::default();
+        let frame = create_test_frame(64, 64, 100);
+        let mvs = estimator.estimate(&frame, &frame, 64, 64);
+        // Identical frames → no non-zero motion vectors
+        assert!(mvs.is_empty());
+    }
+
+    #[test]
+    fn test_estimate_motion_parallel_identical_frames() {
+        let frame = create_test_frame(128, 128, 50);
+        let mvs = estimate_motion_parallel(
+            &frame,
+            &frame,
+            128,
+            128,
+            16,
+            8,
+            SearchAlgorithm::DiamondSearch,
+            256,
+        );
+        assert!(
+            mvs.is_empty(),
+            "identical frames should yield no motion vectors"
+        );
+    }
+
+    #[test]
+    fn test_estimate_motion_parallel_detects_motion() {
+        let (current, previous) = create_shifted_frame(128, 128, 4, 0);
+        let mvs = estimate_motion_parallel(
+            &current,
+            &previous,
+            128,
+            128,
+            16,
+            8,
+            SearchAlgorithm::FullSearch,
+            256,
+        );
+        assert!(
+            !mvs.is_empty(),
+            "shifted frame should produce motion vectors"
+        );
+    }
+
+    #[test]
+    fn test_search_algorithm_default_is_diamond() {
+        let algo = SearchAlgorithm::default();
+        assert_eq!(algo, SearchAlgorithm::DiamondSearch);
     }
 }

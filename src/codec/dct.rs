@@ -264,10 +264,7 @@ mod tests {
         for (i, (original, reconstructed)) in input.iter().zip(output.iter()).enumerate() {
             assert!(
                 (original - reconstructed).abs() < 0.01,
-                "Mismatch at {}: {} vs {}",
-                i,
-                original,
-                reconstructed
+                "Mismatch at {i}: {original} vs {reconstructed}"
             );
         }
     }
@@ -302,7 +299,7 @@ mod tests {
 
         // Should have reasonable energy compaction
         let compaction = energy_compaction(&input, &reconstructed);
-        assert!(compaction > 0.9, "Energy compaction: {}", compaction);
+        assert!(compaction > 0.9, "Energy compaction: {compaction}");
     }
 
     #[test]
@@ -327,5 +324,93 @@ mod tests {
         for result in &results {
             assert_eq!(result.len(), 64);
         }
+    }
+
+    #[test]
+    fn test_idct2d_parallel_roundtrip() {
+        let blocks: Vec<Vec<f64>> = (0..8)
+            .map(|k| (0..64).map(|i| (i + k) as f64).collect())
+            .collect();
+
+        let forward = dct2d_parallel(&blocks, 8);
+        let backward = idct2d_parallel(&forward, 8);
+
+        assert_eq!(backward.len(), 8);
+        for (original, reconstructed) in blocks.iter().zip(backward.iter()) {
+            for (o, r) in original.iter().zip(reconstructed.iter()) {
+                assert!((o - r).abs() < 0.5, "parallel IDCT error: {o} vs {r}");
+            }
+        }
+    }
+
+    #[test]
+    fn test_quantize_dequantize_roundtrip() {
+        let transform = DctTransform::new(8);
+        let input: Vec<f64> = (0..64).map(|i| (i * 3) as f64).collect();
+        let coefficients = transform.forward(&input);
+        let quantized = transform.quantize(&coefficients);
+        let dequantized = transform.dequantize(&quantized);
+
+        // After quantize→dequantize the values should be close to the original coefficients
+        let max_err = coefficients
+            .iter()
+            .zip(dequantized.iter())
+            .map(|(a, b)| (a - b).abs())
+            .fold(0.0_f64, f64::max);
+        // Error bounded by half the largest quant step (≈ 60)
+        assert!(max_err < 70.0, "quantize roundtrip max error: {max_err}");
+    }
+
+    #[test]
+    fn test_with_quality_low_increases_quant_steps() {
+        let default = DctTransform::new(8);
+        let low_quality = DctTransform::new(8).with_quality(1);
+
+        // At quality=1 the scale factor is 5000 → quant steps much larger
+        let default_sum: f64 = default.quant_matrix.iter().sum();
+        let low_sum: f64 = low_quality.quant_matrix.iter().sum();
+        assert!(
+            low_sum > default_sum,
+            "low quality should have larger quant steps: {low_sum} vs {default_sum}"
+        );
+    }
+
+    #[test]
+    fn test_with_quality_high_decreases_quant_steps() {
+        let default = DctTransform::new(8);
+        let high_quality = DctTransform::new(8).with_quality(99);
+
+        // At quality=99 the scale factor is 2 → quant steps much smaller
+        let default_sum: f64 = default.quant_matrix.iter().sum();
+        let high_sum: f64 = high_quality.quant_matrix.iter().sum();
+        assert!(
+            high_sum < default_sum,
+            "high quality should have smaller quant steps: {high_sum} vs {default_sum}"
+        );
+    }
+
+    #[test]
+    fn test_sparse_encode_threshold_filters_small_coefficients() {
+        // threshold 0.01 → threshold_i = 10 → values with |v| <= 10 filtered out
+        let coefficients = vec![1000, 2, -3, 0, 1, 500, 0, 0, 0];
+        let sparse = sparse_dct_encode(&coefficients, 3, 0.01);
+
+        // Only 1000 and 500 survive the threshold
+        assert_eq!(sparse.len(), 2);
+        let values: Vec<f32> = sparse.iter().map(|&(_, _, v)| v).collect();
+        assert!(values.contains(&1000.0));
+        assert!(values.contains(&500.0));
+    }
+
+    #[test]
+    fn test_sparse_decode_out_of_bounds_ignored() {
+        // Indices that would exceed the matrix size must be silently ignored
+        let size = 3usize;
+        let sparse = vec![(10u32, 10u32, 99.0_f32)]; // idx = 10*3+10 = 40 >= 9
+        let decoded = sparse_dct_decode(&sparse, size, 0);
+        assert!(
+            decoded.iter().all(|&v| v == 0),
+            "out-of-bounds sparse entry must be ignored"
+        );
     }
 }
