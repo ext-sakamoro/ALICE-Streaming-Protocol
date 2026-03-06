@@ -20,12 +20,12 @@ unsafe impl Send for SendPtr {}
 
 impl SendPtr {
     #[inline]
-    fn new(ptr: *const u8, len: usize) -> Self {
+    const fn new(ptr: *const u8, len: usize) -> Self {
         Self(ptr, len)
     }
 
     #[inline]
-    unsafe fn as_slice(&self) -> &[u8] {
+    const unsafe fn as_slice(&self) -> &[u8] {
         std::slice::from_raw_parts(self.0, self.1)
     }
 }
@@ -669,7 +669,7 @@ fn parse_packet(data: &[u8]) -> PyResult<(String, u32, u32)> {
 
 /// Get library version
 #[pyfunction]
-fn version() -> &'static str {
+const fn version() -> &'static str {
     crate::VERSION
 }
 
@@ -858,12 +858,12 @@ impl PyHybridTransmitter {
     }
 
     /// Current sequence number.
-    fn sequence(&self) -> u32 {
+    const fn sequence(&self) -> u32 {
         self.inner.sequence()
     }
 
     /// Current scene version.
-    fn scene_version(&self) -> u32 {
+    const fn scene_version(&self) -> u32 {
         self.inner.scene_version()
     }
 }
@@ -878,7 +878,7 @@ struct PyHybridReceiver {
 #[pymethods]
 impl PyHybridReceiver {
     #[new]
-    fn new() -> Self {
+    const fn new() -> Self {
         Self {
             inner: HybridReceiver::new(),
         }
@@ -950,7 +950,7 @@ impl PyHybridReceiver {
     }
 
     /// Number of frames received.
-    fn frames_received(&self) -> u32 {
+    const fn frames_received(&self) -> u32 {
         self.inner.frames_received()
     }
 }
