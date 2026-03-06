@@ -112,8 +112,11 @@
 #![warn(missing_docs)]
 #![warn(clippy::all)]
 
+pub mod bitrate;
 pub mod codec;
+pub mod congestion;
 pub mod header;
+pub mod loss_recovery;
 pub mod packet;
 pub mod types;
 
@@ -150,9 +153,12 @@ pub mod sync_bridge;
 mod python;
 
 // Re-exports for convenience
+pub use bitrate::{BitrateConfig, BitrateController};
 pub use codec::*;
+pub use congestion::{CongestionController, CongestionState};
 pub use header::*;
 pub use hybrid::*;
+pub use loss_recovery::LossDetector;
 #[cfg(any(feature = "codec", feature = "voice"))]
 pub use media::*;
 pub use packet::*;
