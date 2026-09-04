@@ -1,0 +1,49 @@
+[package]
+name = "libasp-fuzz"
+version = "0.0.0"
+publish = false
+edition = "2021"
+
+[package.metadata]
+cargo-fuzz = true
+
+[dependencies]
+libfuzzer-sys = "0.4"
+arbitrary = { version = "1", features = ["derive"] }
+
+# NOTE: crate 名は "libasp" (repo 名 ALICE-Streaming-Protocol とは別)
+[dependencies.libasp]
+path = ".."
+default-features = false
+# fuzz target で bincode legacy 経路も fuzz するため feature 有効化
+features = ["bincode-compat"]
+
+# fuzz side にも同名 feature を再宣言 (fuzz target 側 #[cfg(feature = "...")] 用)
+[features]
+default = ["bincode-compat"]
+bincode-compat = []
+
+# cargo-machete false-positive 予防 (canonical [[reference_alice_ci_canonical_template]] 罠 #3)
+# - libfuzzer-sys: fuzz_target! macro 経由で使用 (macro 展開時 use)
+# - arbitrary: 将来 fuzz target で #[derive(Arbitrary)] 使用時に必要
+#   (現行 3 target は raw &[u8] のみだが、canonical scaffold として pre-listed)
+[package.metadata.cargo-machete]
+ignored = ["libfuzzer-sys", "arbitrary"]
+
+[[bin]]
+name = "fuzz_packet_decode"
+path = "fuzz_targets/fuzz_packet_decode.rs"
+doc = false
+
+[[bin]]
+name = "fuzz_read_packet_fb"
+path = "fuzz_targets/fuzz_read_packet_fb.rs"
+doc = false
+
+[[bin]]
+name = "fuzz_from_bytes_bincode"
+path = "fuzz_targets/fuzz_from_bytes_bincode.rs"
+doc = false
+
+[workspace]
+members = ["."]

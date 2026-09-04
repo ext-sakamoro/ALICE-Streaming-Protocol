@@ -1,0 +1,110 @@
+# cargo-deny 設定 (v0.14+ schema)
+# https://embarkstudios.github.io/cargo-deny/
+#
+# canonical CI template: [[reference_alice_ci_canonical_template]]
+# ALICE-SDF v1.7.7 (commit 52d26f9) の deny.toml を base に libasp
+# (ALICE-Streaming-Protocol) 用に調整
+#
+# libasp 自身は "MIT OR Apache-2.0" のため self-exception は不要
+# sibling stubs (alice-codec / alice-voice / alice-sync / alice-physics /
+# alice-crypto) は alice-stubs action で "MIT OR Apache-2.0" 生成される
+# (canonical 罠 #2 予防)
+
+[graph]
+all-features = false
+no-default-features = false
+
+[output]
+feature-depth = 1
+
+# ---------------------------------------------------------------------------
+# Advisories (RustSec CVE + yanked)
+# ---------------------------------------------------------------------------
+[advisories]
+db-path = "~/.cargo/advisory-db"
+db-urls = ["https://github.com/rustsec/advisory-db"]
+version = 2
+yanked = "deny"
+ignore = [
+    # bincode 1.x unmaintained (canonical trap #6)
+    # libasp は bincode-compat feature 経由で legacy serialization を保持
+    # bincode 2.x への移行は breaking change のため v2.0 で対応予定
+    # DoS 対策として `.with_limit::<N>()` 相当の入力サイズ上限を採用
+    "RUSTSEC-2025-0141",
+    # pyo3 0.23.x Python::detach thread-safety (upgrade to >=0.24.1)
+    # pyo3 0.29 (Sync bound 追加) への major upgrade は Python binding API
+    # 破壊的変更を含むため v2.0 で対応 短期は Python::detach 使用箇所ゼロを維持
+    "RUSTSEC-2025-0020",
+    # pyo3 0.23.x Py<T> Sync bound 不足 (upgrade to >=0.29.0)
+    # 同上、v2.0 での pyo3 0.29 移行時に解消
+    "RUSTSEC-2026-0177",
+]
+
+# ---------------------------------------------------------------------------
+# Licenses (allow-list 方式)
+# ---------------------------------------------------------------------------
+[licenses]
+version = 2
+confidence-threshold = 0.8
+allow = [
+    "MIT",
+    "Apache-2.0",
+    "Apache-2.0 WITH LLVM-exception",
+    "BSD-2-Clause",
+    "BSD-3-Clause",
+    "ISC",
+    "Zlib",
+    "Unicode-3.0",
+    "Unicode-DFS-2016",
+    "CC0-1.0",
+    "0BSD",
+    "BSL-1.0",
+    "MPL-2.0",
+    "OpenSSL",
+    # canonical trap #14: font-related licenses (egui / epaint_default_fonts 経由)
+    # libasp では現状 unused だが将来 view feature 追加時に備え pre-listed
+    "OFL-1.1",
+    "Ubuntu-font-1.0",
+    # LLVM ecosystem (libfuzzer-sys 由来、fuzz target build に必要)
+    "NCSA",
+]
+
+[[licenses.clarify]]
+name = "ring"
+version = "*"
+expression = "MIT AND ISC AND OpenSSL"
+license-files = [{ path = "LICENSE", hash = 0xbd0eed23 }]
+
+[[licenses.clarify]]
+name = "webpki"
+version = "*"
+expression = "ISC"
+license-files = [{ path = "LICENSE", hash = 0x001c7e6c }]
+
+# libasp 自身は "MIT OR Apache-2.0" のため self-exception 不要
+# sibling stubs も同 license のため exception 追加不要
+
+# ---------------------------------------------------------------------------
+# Bans (banned crate / duplicate / wildcard)
+# ---------------------------------------------------------------------------
+[bans]
+multiple-versions = "warn"
+wildcards = "allow"   # path dep が wildcard version になるため必須
+highlight = "all"
+workspace-default-features = "allow"
+external-default-features = "allow"
+
+deny = []
+skip = []
+skip-tree = []
+
+# ---------------------------------------------------------------------------
+# Sources
+# ---------------------------------------------------------------------------
+[sources]
+unknown-registry = "warn"
+unknown-git = "warn"
+allow-registry = ["https://github.com/rust-lang/crates.io-index"]
+allow-git = []
+
+[sources.allow-org]

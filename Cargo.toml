@@ -94,3 +94,27 @@ strip = true
 opt-level = 3
 lto = "fat"
 codegen-units = 1
+
+# canonical CI template [[reference_alice_ci_canonical_template]] 罠 #3:
+# cargo-machete false-positive を明示除外
+# - log / base64 / num-complex: 現状 src/ で未使用だが公開 API / 将来 feature 用に残置
+# - serde_bytes: serde derive 経由の binary field 用 (macro 展開経由で使用)
+# - wide: simd feature で使用 (feature-gated) — canonical trap #3
+# - bytemuck: zero-copy cast helper、feature-gated / 一部 module で macro 経由使用
+# - ndarray: numpy 経由の array 型として使用 (python feature)
+# - num-traits: 数値抽象 trait、将来 feature 用
+# - wasm-bindgen / js-sys / web-sys: wasm feature で使用 (feature-gated)
+[package.metadata.cargo-machete]
+ignored = [
+    "log",
+    "base64",
+    "serde_bytes",
+    "num-complex",
+    "wide",
+    "bytemuck",
+    "ndarray",
+    "num-traits",
+    "wasm-bindgen",
+    "js-sys",
+    "web-sys",
+]
