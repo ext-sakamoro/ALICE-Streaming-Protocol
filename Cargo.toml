@@ -14,7 +14,7 @@ name = "libasp"
 crate-type = ["rlib"]
 
 [features]
-default = ["python"]
+default = []
 python = ["pyo3", "numpy"]
 wasm = ["wasm-bindgen", "js-sys", "web-sys"]
 simd = []
@@ -63,11 +63,11 @@ js-sys = { version = "0.3", optional = true }
 web-sys = { version = "0.3", optional = true, features = ["console"] }
 
 # ALICE Media Stack (optional)
-alice-codec = { path = "../ALICE-Codec", optional = true, default-features = false, features = ["std"] }
-alice-voice = { path = "../ALICE-Voice", optional = true, default-features = false, features = ["std"] }
-alice-sync = { path = "../ALICE-Sync", optional = true, default-features = false, features = ["std"] }
-alice-physics = { path = "../ALICE-Physics", optional = true, default-features = false, features = ["std"] }
-alice-crypto = { path = "../ALICE-Crypto", optional = true, default-features = false, features = ["std"] }
+alice-codec = { path = "../ALICE-Codec", version = "0.1", optional = true, default-features = false, features = ["std"] }
+alice-voice = { path = "../ALICE-Voice", version = "0.1", optional = true, default-features = false, features = ["std"] }
+alice-sync = { path = "../ALICE-Sync", version = "0.6", optional = true, default-features = false, features = ["std"] }
+alice-physics = { path = "../ALICE-Physics", version = "1", optional = true, default-features = false, features = ["std"] }
+alice-crypto = { path = "../ALICE-Crypto", version = "0.1", optional = true, default-features = false, features = ["std"] }
 
 # Error handling
 thiserror = "2.0"
