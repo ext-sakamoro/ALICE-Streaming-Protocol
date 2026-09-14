@@ -20,8 +20,9 @@ wasm = ["wasm-bindgen", "js-sys", "web-sys"]
 simd = []
 bincode-compat = ["dep:bincode"]  # Legacy Rust-only serialization
 codec = ["dep:alice-codec"]       # ALICE-Codec (wavelet + rANS) integration
-voice = ["dep:alice-voice"]       # ALICE-Voice (LPC parametric) integration
-media-stack = ["codec", "voice"]  # Full A/V media pipeline
+# voice feature は alice-voice 未 publish のため 1.0.0 で一時 disable
+# voice = ["dep:alice-voice"]       # ALICE-Voice (LPC parametric) integration
+media-stack = ["codec"]  # A/V media pipeline (voice 一時除外、alice-voice publish 後 1.1 で復活予定)
 sync = ["dep:alice-sync"]         # ALICE-Sync events embedded in ASP packets
 physics = ["dep:alice-physics"]   # Physics state delta → D-packets
 crypto = ["dep:alice-crypto"]    # ALICE-Crypto AEAD encryption for ASP packets
@@ -64,7 +65,8 @@ web-sys = { version = "0.3", optional = true, features = ["console"] }
 
 # ALICE Media Stack (optional)
 alice-codec = { path = "../ALICE-Codec", version = "0.1", optional = true, default-features = false, features = ["std"] }
-alice-voice = { path = "../ALICE-Voice", version = "0.1", optional = true, default-features = false, features = ["std"] }
+# alice-voice 一時 disable (crates.io 未 publish、user 保留、1.1 で復活予定)
+# alice-voice = { path = "../ALICE-Voice", version = "0.1", optional = true, default-features = false, features = ["std"] }
 alice-sync = { path = "../ALICE-Sync", version = "0.6", optional = true, default-features = false, features = ["std"] }
 alice-physics = { path = "../ALICE-Physics", version = "1", optional = true, default-features = false, features = ["std"] }
 alice-crypto = { path = "../ALICE-Crypto", version = "0.1", optional = true, default-features = false, features = ["std"] }
