@@ -12,9 +12,10 @@ repository = "https://github.com/ext-sakamoro/ALICE-Streaming-Protocol"
 keywords = ["streaming", "video", "codec", "alice", "procedural"]
 categories = ["multimedia::video", "compression"]
 
+# (default lib target: an explicit `crate-type = ["rlib"]` makes the target kind
+# "rlib", which cargo-mutants skips — mutants --list returned 0)
 [lib]
 name = "libasp"
-crate-type = ["rlib"]
 
 [features]
 default = []

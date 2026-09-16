@@ -1,0 +1,99 @@
+# quality-deep — 週次 / 手動 / PR 差分の深い品質検査 (karikari-review §13、2026-09-15 制定)
+#
+# mutants : cargo-mutants (test が bug を検出できるかの逆検査) PR では --in-diff で差分のみ、
+#           週次 / 手動は crate 全体を 8 shard 並列 (ALICE-Zip canonical: 910 mutant で 8 shard × -j 2 ≈ 25 min)
+#           test set は `--lib --test analytic_oracle` (解析解 oracle を外すと法則が未測定に見える、罠 #44)
+#
+# 除外 (.cargo/mutants.toml): flatc 生成の src/generated/** (schemas/asp.fbs から再生成される)
+# 2026-09-16: local (Mac) では `cargo mutants --list` の source walk が ~30 s / 2 GB で kill されるため
+# 件数未計測、GH runner で初回実行して確認する
+# 罠 #22 (continue-on-error は compile error も green に潰す) に従い continue-on-error は使わない
+# informational な結果は Job Summary に書く (exit code 0 / 2 / 3 = 走った、それ以外 = 壊れている)
+name: Quality Deep
+
+on:
+  schedule:
+    - cron: '0 18 * * 0'   # 日曜 03:00 JST
+  workflow_dispatch:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'src/**'
+      - 'Cargo.toml'
+      - '.github/workflows/quality-deep.yml'
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  mutants:
+    name: Mutation testing (cargo-mutants${{ github.event_name == 'pull_request' && ', in-diff' || format(', shard {0}/8', matrix.shard) }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: ${{ github.event_name == 'pull_request' && fromJSON('[0]') || fromJSON('[0,1,2,3,4,5,6,7]') }}
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Install cargo-mutants
+        uses: taiki-e/install-action@cargo-mutants
+      - name: Mutants (PR = in-diff)
+        if: github.event_name == 'pull_request'
+        run: |
+          git diff origin/${{ github.base_ref }}...HEAD > /tmp/pr.diff
+          # An infinite-loop mutant (e.g. `pos += … → pos *= …` in lz77_encode) fills
+          # RAM before the 300 s test timeout and the OOM kill takes the runner down
+          # ("runner has received a shutdown signal", 2026-09-15 shards 0/1 twice);
+          # cap the address space so the test aborts instead
+          ulimit -v 6291456
+          set +e
+          cargo mutants --in-diff /tmp/pr.diff --timeout 300 --build-timeout 240 -j 2 \
+            --no-default-features --features simd,media-stack,sync,physics,crypto,bincode-compat --output mutants.out -- --lib --test analytic_oracle
+          rc=$?
+          set -e
+          case $rc in 0|2|3) ;; *) echo "::error::cargo-mutants exit $rc (baseline red or usage error)"; exit $rc;; esac
+      - name: Mutants (weekly / manual = whole crate, shard ${{ matrix.shard }}/8, lib + oracle tests)
+        if: github.event_name != 'pull_request'
+        run: |
+          ulimit -v 6291456
+          set +e
+          cargo mutants --shard ${{ matrix.shard }}/8 -j 2 --timeout 300 --build-timeout 240 \
+            --no-default-features --features simd,media-stack,sync,physics,crypto,bincode-compat --output mutants.out -- --lib --test analytic_oracle
+          rc=$?
+          set -e
+          case $rc in 0|2|3) ;; *) echo "::error::cargo-mutants exit $rc (baseline red or usage error)"; exit $rc;; esac
+      - name: Summary
+        if: always()
+        run: |
+          {
+            echo "## cargo-mutants (${{ github.event_name == 'pull_request' && 'in-diff' || format('shard {0}/8', matrix.shard) }})"
+            if [ -f mutants.out/outcomes.json ]; then
+              python3 - <<'PY'
+          import json
+          d = json.load(open("mutants.out/outcomes.json"))
+          s = d.get("summary", d)
+          caught = s.get("caught", 0); missed = s.get("missed", 0); un = s.get("unviable", 0); to = s.get("timeout", 0)
+          tot = caught + missed
+          print(f"- caught {caught} / missed {missed} / unviable {un} / timeout {to}")
+          print(f"- mutation score: {caught / tot * 100:.1f}% (目標 ≥ 80%)" if tot else "- no viable mutants")
+          PY
+              echo; echo "### missed"; cat mutants.out/missed.txt 2>/dev/null | head -80
+            else
+              echo "no output (build failed?)"
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: mutants-out-${{ matrix.shard }}
+          path: mutants.out
+          if-no-files-found: ignore

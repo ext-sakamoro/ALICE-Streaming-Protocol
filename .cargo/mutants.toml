@@ -1,0 +1,4 @@
+# cargo-mutants configuration (quality-deep.yml)
+# flatc-generated FlatBuffers code is not a mutation target (regenerated from
+# schemas/asp.fbs; its correctness is the verifier + the round-trip tests)
+exclude_globs = ["src/generated/**"]
