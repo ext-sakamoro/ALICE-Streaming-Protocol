@@ -2,6 +2,16 @@
 
 All notable changes to ALICE-Streaming-Protocol will be documented in this file.
 
+## [Unreleased]
+
+### Fixed
+- Release profile no longer sets `panic = "abort"`: PyO3 turns a Rust panic into a Python `PanicException` only when the panic can unwind, so with `abort` any panic inside a `libasp` call (a mismatched NumPy shape, an index past the frame) terminated the interpreter instead of raising
+
+### Added
+- `flatbuffers_api::encode_payload` omits empty vectors (regions / motion vectors / region deltas / corrections): a D-Packet without deltas is 16 bytes smaller and byte-identical to `PacketEncoder::encode_d_packet`; the reader already treated an absent vector as empty
+- `tests/wire_roundtrip.rs`: `PacketEncoder` output parses to the same packet as `to_bytes` (D / I / S), payload helpers (`correction_count`, `total_correction_bytes`, `add_region_delta`, `dominant_color`, `as_c_packet` / `as_s_packet`), `estimated_size` per-item allowances, bincode path length / header / CRC validation
+- `tests/analytic_oracle.rs`: motion estimation contract tests — boundary blocks recover the shift and a buffer shorter than `width × height` never panics (blocks that do not fit are static), candidates outside the search window or the frame are never reported (a SAD-0 match that wraps past the right edge is rejected), the step schedule / diagonal pattern of three-step reach the full window on a linear ramp (SAD zero set `dx + dy = −(sx + sy)`), `early_threshold` is a strict upper bound (s + 1 accepts the static block, s keeps searching, 1 accepts only an exact match)
+
 ## [1.1.0] - 2026-09-16
 
 ### Fixed

@@ -360,6 +360,257 @@ fn static_frame_reports_no_vectors_and_a_single_moved_block_is_the_only_entry() 
     );
 }
 
+const ALL_ALGS: [SearchAlgorithm; 4] = [
+    SearchAlgorithm::FullSearch,
+    SearchAlgorithm::ThreeStepSearch,
+    SearchAlgorithm::DiamondSearch,
+    SearchAlgorithm::HexagonSearch,
+];
+
+/// Every reported vector obeys the window and stays inside the frame
+fn assert_vectors_within_contract(
+    mvs: &[libasp::types::MotionVector],
+    w: usize,
+    h: usize,
+    bs: usize,
+    range: usize,
+) {
+    for mv in mvs {
+        let (dx, dy) = (i32::from(mv.dx), i32::from(mv.dy));
+        assert!(
+            dx.abs() <= range as i32 && dy.abs() <= range as i32,
+            "outside the window: {mv:?}"
+        );
+        let rx = i64::from(mv.block_x) * bs as i64 + i64::from(dx);
+        let ry = i64::from(mv.block_y) * bs as i64 + i64::from(dy);
+        assert!(
+            rx >= 0 && ry >= 0 && rx + bs as i64 <= w as i64 && ry + bs as i64 <= h as i64,
+            "reference outside the frame: {mv:?}"
+        );
+    }
+}
+
+#[test]
+fn boundary_blocks_recover_the_shift_and_a_short_buffer_never_panics() {
+    // (a) the last block row / column are searched like any other block: a
+    // +2 shift is recovered by every block whose reference lies in the frame,
+    // including the bottom-right one (whose block ends exactly at the buffer end)
+    let (w, h) = (64usize, 48usize);
+    let prev = smooth_texture(w, h);
+    let cur = shifted(&prev, w, h, 2, 2);
+    for alg in ALL_ALGS {
+        for bs in [8usize, 16] {
+            let mvs = estimate_motion_with(&cur, &prev, w, h, bs, 4, alg, 0);
+            assert_vectors_within_contract(&mvs, w, h, bs, 4);
+            let (bxs, bys) = (w / bs, h / bs);
+            let found: std::collections::HashSet<(u16, u16)> =
+                mvs.iter().map(|m| (m.block_x, m.block_y)).collect();
+            for by in 1..bys {
+                for bx in 1..bxs {
+                    assert!(
+                        found.contains(&(bx as u16, by as u16)),
+                        "{alg:?} bs={bs}: block ({bx},{by}) static"
+                    );
+                }
+            }
+            for mv in mvs.iter().filter(|m| m.block_x >= 1 && m.block_y >= 1) {
+                assert_eq!(
+                    (mv.dx, mv.dy, mv.sad),
+                    (-2, -2, 0),
+                    "{alg:?} bs={bs}: {mv:?}"
+                );
+            }
+        }
+    }
+    // (b) a buffer shorter than width × height: the blocks that do not fit
+    // are reported static (SAD = u32::MAX candidates never win), nothing panics
+    for short in [1usize, 15, 16, 64 * 16 - 1] {
+        let cur_short = &cur[..w * h - short];
+        let prev_short = &prev[..w * h - short];
+        for alg in ALL_ALGS {
+            for (c, p) in [
+                (cur_short, &prev[..]),
+                (&cur[..], prev_short),
+                (cur_short, prev_short),
+            ] {
+                let mvs = estimate_motion_with(c, p, w, h, 16, 4, alg, 0);
+                assert_vectors_within_contract(&mvs, w, h, 16, 4);
+                // the bottom-right *current* block never fits in a shortened current
+                // buffer (its reference at (−2, −2) still fits a shortened previous)
+                if c.len() < w * h {
+                    assert!(
+                        !mvs.iter().any(|m| (m.block_x, m.block_y) == (3, 2)),
+                        "{alg:?} short={short}: {mvs:?}"
+                    );
+                }
+                for mv in mvs.iter().filter(|m| m.block_x >= 1 && m.block_y >= 1) {
+                    assert_eq!(
+                        (mv.dx, mv.dy, mv.sad),
+                        (-2, -2, 0),
+                        "{alg:?} short={short}: {mv:?}"
+                    );
+                }
+            }
+        }
+    }
+}
+
+#[test]
+fn candidates_outside_the_window_or_the_frame_are_never_reported() {
+    // (a) a shift larger than the window in one axis: the heuristic searches
+    // must stop at the window edge instead of walking to the true minimum
+    let (w, h) = (96usize, 64usize);
+    let prev = smooth_texture(w, h);
+    let range = 4usize;
+    for (sx, sy) in [
+        (range as i32 + 3, 0),
+        (0, -(range as i32 + 2)),
+        (range as i32 + 1, range as i32 + 1),
+    ] {
+        let cur = shifted(&prev, w, h, sx, sy);
+        for alg in ALL_ALGS {
+            let mvs = estimate_motion_with(&cur, &prev, w, h, 16, range, alg, 0);
+            assert_vectors_within_contract(&mvs, w, h, 16, range);
+            assert!(mvs.iter().all(|m| m.sad > 0), "{alg:?} shift ({sx},{sy}): the true shift is outside the window, SAD 0 is impossible: {mvs:?}");
+        }
+    }
+    // (b) a candidate that spills past the right edge of the frame is a memory
+    // address inside the buffer (the next row), so only the frame check can
+    // reject it: make that wrapped content an exact SAD-0 match and check it
+    // is never chosen
+    let (w, h, bs) = (64usize, 32usize, 8usize);
+    let prev = lcg_bytes(w * h, 11);
+    let mut cur = prev.clone();
+    let (bx, by) = (w / bs - 1, 1usize); // right-edge block
+    let spill = 4i32; // reference at block_x + 4 crosses the frame edge by 4 columns
+    for y in 0..bs {
+        for x in 0..bs {
+            let src = (by * bs + y) * w + bx * bs + x + spill as usize; // wraps into the next row
+            cur[(by * bs + y) * w + bx * bs + x] = prev[src];
+        }
+    }
+    for alg in ALL_ALGS {
+        let mvs = estimate_motion_with(&cur, &prev, w, h, bs, 7, alg, 0);
+        assert_vectors_within_contract(&mvs, w, h, bs, 7);
+        if let Some(mv) = mvs
+            .iter()
+            .find(|m| (usize::from(m.block_x), usize::from(m.block_y)) == (bx, by))
+        {
+            assert!(
+                mv.dx != spill as i16 || mv.dy != 0,
+                "{alg:?} chose the wrapped candidate: {mv:?}"
+            );
+            assert!(mv.sad > 0, "{alg:?}: {mv:?}");
+        }
+    }
+}
+
+#[test]
+fn three_step_reaches_the_full_window_on_a_linear_ramp() {
+    // prev = 2x + 2y (no wrap for 64×64): SAD(dx, dy) = 2·B²·|dx + dy + sx + sy|,
+    // a convex landscape whose zero set is the line dx + dy = −(sx + sy). With
+    // the step schedule r/2 → 1 (8, 4, 2, 1 for r = 16) and the diagonal
+    // pattern entries the search reaches |dx| + |dy| = 30, so a (15, 15)
+    // shift must end at SAD 0; a shorter schedule or a pattern without the
+    // diagonal cannot get there
+    let (w, h, bs, range) = (64usize, 64usize, 16usize, 16usize);
+    let prev: Vec<u8> = (0..w * h)
+        .map(|i| (2 * (i % w) + 2 * (i / w)) as u8)
+        .collect();
+    for (sx, sy) in [
+        (15i32, 15i32),
+        (-15, -15),
+        (15, 0),
+        (0, -15),
+        (12, 3),
+        (-7, -8),
+    ] {
+        let cur = shifted(&prev, w, h, sx, sy);
+        for alg in ALL_ALGS {
+            let mvs = estimate_motion_with(&cur, &prev, w, h, bs, range, alg, 0);
+            assert_vectors_within_contract(&mvs, w, h, bs, range);
+            for by in 1..h / bs {
+                for bx in 1..w / bs {
+                    // reference block (bx·B − sx, by·B − sy) must lie in the frame
+                    let (rx, ry) = ((bx * bs) as i32 - sx, (by * bs) as i32 - sy);
+                    if rx < 0 || ry < 0 || rx + bs as i32 > w as i32 || ry + bs as i32 > h as i32 {
+                        continue;
+                    }
+                    let mv = mvs
+                        .iter()
+                        .find(|m| (usize::from(m.block_x), usize::from(m.block_y)) == (bx, by))
+                        .unwrap_or_else(|| {
+                            panic!("{alg:?} shift ({sx},{sy}): block ({bx},{by}) static")
+                        });
+                    assert_eq!(mv.sad, 0, "{alg:?} shift ({sx},{sy}): {mv:?}");
+                    assert_eq!(
+                        i32::from(mv.dx) + i32::from(mv.dy),
+                        -(sx + sy),
+                        "{alg:?} shift ({sx},{sy}): {mv:?}"
+                    );
+                }
+            }
+        }
+    }
+}
+
+#[test]
+fn early_threshold_is_a_strict_upper_bound_on_the_accepted_sad() {
+    // block (1,1) after a (1, 0) shift: origin SAD s > 0, exact match at (−1, 0)
+    let (w, h, bs) = (64usize, 48usize, 16usize);
+    let prev = smooth_texture(w, h);
+    let cur = shifted(&prev, w, h, 1, 0);
+    let s = sad_ref(&cur, &prev, w, 1, 1, bs, 0, 0);
+    assert!(s > 1);
+    let at = |mvs: &[libasp::types::MotionVector]| {
+        mvs.iter()
+            .find(|m| (m.block_x, m.block_y) == (1, 1))
+            .map(|m| (m.dx, m.dy, m.sad))
+    };
+    for alg in ALL_ALGS {
+        // threshold s + 1: the static block is accepted at the origin → no vector
+        assert_eq!(
+            at(&estimate_motion_with(&cur, &prev, w, h, bs, 4, alg, s + 1)),
+            None,
+            "{alg:?}"
+        );
+        // threshold s: the origin (SAD exactly s) is not accepted → some better
+        // candidate is reported (the heuristics accept the first SAD < s)
+        let (_, _, sad) = at(&estimate_motion_with(&cur, &prev, w, h, bs, 4, alg, s))
+            .unwrap_or_else(|| panic!("{alg:?} threshold s: block (1,1) static"));
+        assert!(sad < s, "{alg:?}: {sad} vs {s}");
+        if alg == SearchAlgorithm::FullSearch {
+            assert_eq!(
+                sad, 0,
+                "full search is exhaustive regardless of the threshold"
+            );
+        } else {
+            // the heuristics accept the first candidate below the threshold; the
+            // exact match at (−1, 0) is not in any first-step pattern, so that
+            // candidate has SAD > 0
+            assert!(
+                sad > 0,
+                "{alg:?} kept searching past the accepted candidate"
+            );
+        }
+        // threshold 1: only an exact match is accepted early → the true vector
+        assert_eq!(
+            at(&estimate_motion_with(&cur, &prev, w, h, bs, 4, alg, 1)),
+            Some((-1, 0, 0)),
+            "{alg:?}"
+        );
+        // threshold 0 disables the shortcut: same answer
+        assert_eq!(
+            at(&estimate_motion_with(&cur, &prev, w, h, bs, 4, alg, 0)),
+            Some((-1, 0, 0)),
+            "{alg:?}"
+        );
+    }
+    assert!(
+        estimate_motion_with(&prev, &prev, w, h, bs, 4, SearchAlgorithm::FullSearch, 0).is_empty()
+    );
+}
+
 #[test]
 fn search_algorithm_parameter_is_honoured() {
     // Until 1.1.0 every SearchAlgorithm ran diamond search. On white noise

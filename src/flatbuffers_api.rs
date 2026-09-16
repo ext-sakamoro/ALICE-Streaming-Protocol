@@ -926,11 +926,17 @@ fn build_i_packet<'a>(
         ));
     }
     let global_palette = build_palette(b, &p.global_palette);
-    let mut regions = Vec::with_capacity(p.regions.len());
-    for r in &p.regions {
-        regions.push(build_region(b, r)?);
-    }
-    let regions = b.create_vector(&regions);
+    // empty vectors are omitted (the reader treats an absent vector as empty,
+    // and a keyframe without regions must not pay for one)
+    let regions = if p.regions.is_empty() {
+        None
+    } else {
+        let mut regions = Vec::with_capacity(p.regions.len());
+        for r in &p.regions {
+            regions.push(build_region(b, r)?);
+        }
+        Some(b.create_vector(&regions))
+    };
     let animation = p.animation.as_ref().map(|a| build_animation(b, a));
     Ok(generated::IPacketPayload::create(
         b,
@@ -940,7 +946,7 @@ fn build_i_packet<'a>(
             fps: p.fps,
             quality: FbQualityLevel(p.quality as i8),
             global_palette: Some(global_palette),
-            regions: Some(regions),
+            regions,
             animation,
             timestamp_ms: p.timestamp_ms,
         },
@@ -977,22 +983,30 @@ fn build_d_packet<'a>(
             "DPacketPayload::sdf_delta / person_mask have no FlatBuffers representation; use write_to_buffer_bincode",
         ));
     }
-    let mvs: Vec<FbMotionVector> = p.motion_vectors.iter().map(motion_vector_to_fb).collect();
-    let motion_vectors = b.create_vector(&mvs);
+    let motion_vectors = if p.motion_vectors.is_empty() {
+        None
+    } else {
+        let mvs: Vec<FbMotionVector> = p.motion_vectors.iter().map(motion_vector_to_fb).collect();
+        Some(b.create_vector(&mvs))
+    };
     let global_motion = p.global_motion.as_ref().map(|a| build_animation(b, a));
-    let mut deltas = Vec::with_capacity(p.region_deltas.len());
-    for d in &p.region_deltas {
-        deltas.push(build_region_delta(b, d)?);
-    }
-    let region_deltas = b.create_vector(&deltas);
+    let region_deltas = if p.region_deltas.is_empty() {
+        None
+    } else {
+        let mut deltas = Vec::with_capacity(p.region_deltas.len());
+        for d in &p.region_deltas {
+            deltas.push(build_region_delta(b, d)?);
+        }
+        Some(b.create_vector(&deltas))
+    };
     Ok(generated::DPacketPayload::create(
         b,
         &generated::DPacketPayloadArgs {
             ref_sequence: p.ref_sequence,
-            motion_vectors: Some(motion_vectors),
+            motion_vectors,
             motion_vectors_compact: None,
             global_motion,
-            region_deltas: Some(region_deltas),
+            region_deltas,
             timestamp_ms: p.timestamp_ms,
         },
     )
@@ -1016,17 +1030,21 @@ fn build_c_packet<'a>(
     b: &mut FlatBufferBuilder<'a>,
     p: &RustCPacket,
 ) -> WIPOffset<flatbuffers::UnionWIPOffset> {
-    let corrections: Vec<_> = p
-        .corrections
-        .iter()
-        .map(|c| build_correction(b, c))
-        .collect();
-    let corrections = b.create_vector(&corrections);
+    let corrections = if p.corrections.is_empty() {
+        None
+    } else {
+        let corrections: Vec<_> = p
+            .corrections
+            .iter()
+            .map(|c| build_correction(b, c))
+            .collect();
+        Some(b.create_vector(&corrections))
+    };
     generated::CPacketPayload::create(
         b,
         &generated::CPacketPayloadArgs {
             ref_sequence: p.ref_sequence,
-            corrections: Some(corrections),
+            corrections,
             correction_count: p.correction_count,
             timestamp_ms: p.timestamp_ms,
         },

@@ -107,7 +107,10 @@ harness = false
 opt-level = 3
 lto = "fat"
 codegen-units = 1
-panic = "abort"
+# `panic = "unwind"` (default) on purpose: the `python` feature (PyO3) converts a
+# Rust panic into a Python `PanicException` by catching the unwind at the FFI
+# boundary; with `panic = "abort"` a bad NumPy shape would take the whole
+# interpreter down instead of raising
 strip = true
 
 [profile.bench]

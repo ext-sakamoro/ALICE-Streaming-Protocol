@@ -338,3 +338,222 @@ fn bincode_path_carries_the_hybrid_fields_the_flatbuffers_path_rejects() {
     };
     assert_eq!(dbg(b), dbg(&i));
 }
+
+// ----------------------------------------------------------------------------
+// The zero-allocation encoder produces the same packets as `to_bytes`, the
+// bincode path validates its input like the FlatBuffers path, and the payload
+// helpers follow their definitions
+// ----------------------------------------------------------------------------
+
+#[test]
+fn packet_encoder_output_parses_to_the_same_packet_as_to_bytes() {
+    use libasp::flatbuffers_api::{FbQualityLevel, FbSyncCommand};
+    use libasp::PacketEncoder;
+    let mut enc = PacketEncoder::new();
+
+    let mvs: Vec<MotionVector> = (0..5u16)
+        .map(|i| MotionVector::new(i, i, -1, 2, 30 + u32::from(i)))
+        .collect();
+    let mut d = DPacketPayload::new(9);
+    d.timestamp_ms = 777;
+    for mv in &mvs {
+        d.add_motion_vector(*mv);
+    }
+    let reference = AspPacket::create_d_packet(4, d)
+        .unwrap()
+        .to_bytes()
+        .unwrap();
+    let fast = enc.encode_d_packet(4, 9, &mvs, 777).to_vec();
+    assert_eq!(fast.len(), reference.len());
+    let a = AspPacket::from_bytes(&fast).unwrap();
+    let b = AspPacket::from_bytes(&reference).unwrap();
+    assert_eq!(dbg(&a.payload), dbg(&b.payload));
+    assert_eq!(a.sequence(), 4);
+    assert_eq!(a.payload_size(), b.payload_size());
+    assert!(enc.buffer_capacity() >= fast.len());
+
+    let reference = AspPacket::create_i_packet(
+        5,
+        IPacketPayload::new(320, 240, 24.0).with_quality(QualityLevel::High),
+    )
+    .unwrap()
+    .to_bytes()
+    .unwrap();
+    let fast = enc
+        .encode_i_packet(5, 320, 240, 24.0, FbQualityLevel::High, 0)
+        .to_vec();
+    let a = AspPacket::from_bytes(&fast).unwrap();
+    let b = AspPacket::from_bytes(&reference).unwrap();
+    // the fast encoder carries no palette; the reader restores the default
+    // ([black]) so the payloads agree while `to_bytes` spends 32 bytes on it
+    assert_eq!(fast.len() + 32, reference.len());
+    assert_eq!(dbg(&a.payload), dbg(&b.payload));
+    assert!(a.is_keyframe());
+
+    let reference = AspPacket::create_s_packet(
+        6,
+        SPacketPayload {
+            command: SyncCommand::Pong,
+            data: SyncData::None,
+            timestamp_ms: 42,
+        },
+    )
+    .unwrap()
+    .to_bytes()
+    .unwrap();
+    let fast = enc.encode_s_packet(6, FbSyncCommand::Pong, 42).to_vec();
+    let a = AspPacket::from_bytes(&fast).unwrap();
+    let b = AspPacket::from_bytes(&reference).unwrap();
+    assert_eq!(fast.len(), reference.len());
+    assert_eq!(dbg(&a.payload), dbg(&b.payload));
+    assert_eq!(a.as_s_packet().map(|s| s.command), Some(SyncCommand::Pong));
+    assert!(a.as_c_packet().is_none());
+}
+
+#[test]
+fn payload_helpers_follow_their_definitions() {
+    let mut c = CPacketPayload::new(1);
+    assert_eq!((c.correction_count, c.total_correction_bytes()), (0, 0));
+    for n in [3usize, 5, 0] {
+        c.add_correction(CorrectionData {
+            roi: RoiRegion::new(Rect::new(0, 0, 1, 1), RoiType::General),
+            pixel_delta: vec![7; n],
+            compression: CompressionFormat::Raw,
+        });
+    }
+    assert_eq!(c.correction_count, 3);
+    assert_eq!(c.corrections.len(), 3);
+    assert_eq!(c.total_correction_bytes(), 8);
+    let packet = AspPacket::create_c_packet(2, c).unwrap();
+    assert_eq!(packet.as_c_packet().map(|p| p.correction_count), Some(3));
+    assert!(packet.as_s_packet().is_none());
+
+    let mut d = DPacketPayload::new(1);
+    d.add_region_delta(RegionDelta {
+        region_index: 4,
+        palette_delta: None,
+        dct_delta: None,
+        param_delta: None,
+    });
+    d.add_region_delta(RegionDelta {
+        region_index: 5,
+        palette_delta: None,
+        dct_delta: None,
+        param_delta: None,
+    });
+    assert_eq!(
+        d.region_deltas
+            .iter()
+            .map(|r| r.region_index)
+            .collect::<Vec<_>>(),
+        vec![4, 5]
+    );
+
+    assert_eq!(ColorPalette::new(vec![]).dominant_color(), None);
+    assert_eq!(
+        palette(3, false).dominant_color(),
+        Some(Color::new(0, 255, 0))
+    );
+    assert_eq!(
+        ColorPalette::default().dominant_color(),
+        Some(Color::black())
+    );
+
+    // estimated_size (pre-serialisation header estimate) grows by the
+    // documented per-item allowance: I 128 / region, D 12 / vector + 64 /
+    // delta, C 32 + bytes / correction, S fixed
+    let base = libasp::AspPacketHeader::SIZE + 4;
+    let mut i = IPacketPayload::new(1, 1, 1.0);
+    let e0 = AspPacket::create_i_packet(0, i.clone())
+        .unwrap()
+        .estimated_size();
+    assert_eq!(e0, base + 64);
+    i.add_region(RegionDescriptor {
+        bounds: Rect::new(0, 0, 1, 1),
+        pattern_type: PatternType::Solid,
+        palette: palette(1, false),
+        dct_coefficients: None,
+        texture_id: None,
+        params: None,
+    });
+    assert_eq!(
+        AspPacket::create_i_packet(0, i).unwrap().estimated_size(),
+        e0 + 128
+    );
+    let mut d = DPacketPayload::new(1);
+    let e0 = AspPacket::create_d_packet(0, d.clone())
+        .unwrap()
+        .estimated_size();
+    assert_eq!(e0, base + 32);
+    d.add_motion_vector(MotionVector::new(0, 0, 1, 1, 1));
+    d.add_motion_vector(MotionVector::new(0, 1, 1, 1, 1));
+    d.add_region_delta(RegionDelta {
+        region_index: 0,
+        palette_delta: None,
+        dct_delta: None,
+        param_delta: None,
+    });
+    assert_eq!(
+        AspPacket::create_d_packet(0, d).unwrap().estimated_size(),
+        e0 + 2 * 12 + 64
+    );
+    let mut c = CPacketPayload::new(1);
+    let e0 = AspPacket::create_c_packet(0, c.clone())
+        .unwrap()
+        .estimated_size();
+    assert_eq!(e0, base + 32);
+    c.add_correction(CorrectionData {
+        roi: RoiRegion::new(Rect::new(0, 0, 1, 1), RoiType::General),
+        pixel_delta: vec![0; 10],
+        compression: CompressionFormat::Raw,
+    });
+    assert_eq!(
+        AspPacket::create_c_packet(0, c).unwrap().estimated_size(),
+        e0 + 32 + 10
+    );
+    let s = AspPacket::create_s_packet(0, SPacketPayload::request_keyframe()).unwrap();
+    assert_eq!(s.estimated_size(), base + 64);
+}
+
+#[cfg(feature = "bincode-compat")]
+#[test]
+fn bincode_path_validates_length_header_and_crc_like_the_flatbuffers_path() {
+    let mut i = IPacketPayload::new(64, 64, 30.0);
+    i.sdf_scene = Some(SdfSceneDescriptor::new(vec![1, 2, 3]));
+    let packet = AspPacket::create_i_packet(1, i).unwrap();
+    let mut buf = Vec::new();
+    packet.write_to_buffer_bincode(&mut buf).unwrap();
+    // header payload_length = bytes between header and CRC
+    let header = libasp::AspPacketHeader::from_bytes(&buf).unwrap();
+    assert_eq!(
+        header.payload_length as usize,
+        buf.len() - libasp::AspPacketHeader::SIZE - 4
+    );
+    assert_eq!(
+        AspPacket::from_bytes_bincode(&buf).unwrap().payload_size(),
+        header.payload_length
+    );
+    let min = libasp::AspPacketHeader::SIZE + 4;
+    for n in [0usize, 1, min - 1] {
+        let err = AspPacket::from_bytes_bincode(&buf[..n]).unwrap_err();
+        assert!(
+            matches!(err, AspError::IncompletePacket { expected, got } if expected == min && got == n),
+            "len {n}: {err:?}"
+        );
+    }
+    for cut in 1..=4usize {
+        let err = AspPacket::from_bytes_bincode(&buf[..buf.len() - cut]).unwrap_err();
+        assert!(
+            matches!(err, AspError::ChecksumMismatch { .. }),
+            "cut {cut}: {err:?}"
+        );
+    }
+    for byte in 0..buf.len() - 4 {
+        let mut b = buf.clone();
+        b[byte] ^= 0x80;
+        assert!(
+            AspPacket::from_bytes_bincode(&b).is_err(),
+            "flip at {byte} accepted"
+        );
+    }
+}
