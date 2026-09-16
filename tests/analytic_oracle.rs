@@ -1003,3 +1003,280 @@ fn motion_magnitude_is_mean_absolute_difference_with_strict_threshold() {
     .detect_with_motion(&cur, &prev, w, h);
     assert!(regions.is_empty(), "{regions:?}");
 }
+
+// ---------------------------------------------------------------- physics bridge
+
+/// Body displacement → D-packet motion vector → body delta is the identity on
+/// the 0.01 grid (`mv = round-toward-zero(Δ·100)` clamped to i16, `sad = |mvx| +
+/// |mvy|`, block = (i mod grid_width, i div grid_width))
+#[cfg(feature = "physics")]
+#[test]
+fn physics_delta_packets_round_trip_on_the_centimetre_grid() {
+    use alice_physics::{Fix128, PhysicsConfig, PhysicsWorld, RigidBody, Vec3Fix};
+    use libasp::physics_bridge::{d_packet_to_body_deltas, PhysicsSnapshot};
+    use libasp::AspPayload;
+
+    let mut world = PhysicsWorld::new(PhysicsConfig::default());
+    for i in 0..5 {
+        world.add_body(RigidBody::new_dynamic(
+            Vec3Fix::from_int(i * 10, 0, 0),
+            Fix128::ONE,
+        ));
+    }
+    let snapshot = PhysicsSnapshot::capture(&world);
+    assert_eq!(snapshot.body_count(), 5);
+
+    // move bodies 1, 3, 4 by exact centimetre multiples; 0 and 2 stay put
+    let moves = [
+        (1usize, 2.5f32, -1.25f32),
+        (3, 0.01, 0.0),
+        (4, -400.0, 400.0),
+    ];
+    for &(i, dx, dy) in &moves {
+        let (x, y, z) = world.bodies[i].position.to_f32();
+        world.bodies[i].position = Vec3Fix::from_f32(x + dx, y + dy, z);
+    }
+    // a body added after the snapshot is ignored
+    world.add_body(RigidBody::new_dynamic(
+        Vec3Fix::from_int(99, 99, 0),
+        Fix128::ONE,
+    ));
+
+    let grid_width = 3u16;
+    let packet = snapshot.delta_to_d_packet(&world, 41, grid_width);
+    assert_eq!(packet.sequence(), 42);
+    assert!(!packet.is_keyframe());
+    let AspPayload::DPacket(d) = &packet.payload else {
+        panic!("not a D-packet")
+    };
+    assert_eq!(d.ref_sequence, 41);
+    assert_eq!(d.motion_vectors.len(), 3, "{:?}", d.motion_vectors);
+    for (mv, &(i, dx, dy)) in d.motion_vectors.iter().zip(&moves) {
+        assert_eq!(
+            (mv.block_x, mv.block_y),
+            ((i % 3) as u16, (i / 3) as u16),
+            "body {i}"
+        );
+        let expect_x = (dx * 100.0).clamp(-32768.0, 32767.0) as i16;
+        let expect_y = (dy * 100.0).clamp(-32768.0, 32767.0) as i16;
+        assert_eq!((mv.dx, mv.dy), (expect_x, expect_y), "body {i}");
+        assert_eq!(
+            mv.sad,
+            i32::from(mv.dx).unsigned_abs() + i32::from(mv.dy).unsigned_abs()
+        );
+    }
+    // 400 m is beyond the ±327.67 m the i16 grid can carry: clamped, not wrapped
+    assert_eq!(
+        (d.motion_vectors[2].dx, d.motion_vectors[2].dy),
+        (i16::MIN, i16::MAX)
+    );
+
+    let deltas = d_packet_to_body_deltas(&d.motion_vectors, grid_width);
+    assert_eq!(deltas.len(), 3);
+    assert_eq!(deltas[0], (1, 2.5, -1.25));
+    assert_eq!(deltas[1], (3, 0.01, 0.0));
+    assert_eq!(
+        deltas[2],
+        (4, f32::from(i16::MIN) / 100.0, f32::from(i16::MAX) / 100.0)
+    );
+    assert!(d_packet_to_body_deltas(&[], grid_width).is_empty());
+
+    // unchanged world → no vectors (the < 1e-6 dead band)
+    let still = PhysicsSnapshot::capture(&world);
+    let AspPayload::DPacket(none) = &still.delta_to_d_packet(&world, 1, grid_width).payload else {
+        panic!("not a D-packet")
+    };
+    assert!(none.motion_vectors.is_empty());
+}
+
+// ---------------------------------------------------------------- hybrid streaming bookkeeping
+
+/// RLE is (`run_len u16 LE`, `value u8`) triples: exact round trip for every
+/// mask, run length ≤ 65 535, output length = 3 × runs
+#[test]
+fn rle_mask_round_trips_and_has_the_documented_length() {
+    use libasp::scene::{rle_decode_mask, rle_encode_mask};
+    let (w, h) = (64u32, 8u32);
+    let n = (w * h) as usize;
+    for (name, mask) in [
+        ("all zero", vec![0u8; n]),
+        ("all one", vec![1u8; n]),
+        (
+            "alternating",
+            (0..n).map(|i| (i % 2) as u8).collect::<Vec<_>>(),
+        ),
+        (
+            "block",
+            (0..n).map(|i| u8::from((100..300).contains(&i))).collect(),
+        ),
+        (
+            "values above 1 are read as their low bit",
+            (0..n).map(|i| (i % 5) as u8).collect(),
+        ),
+    ] {
+        let rle = rle_encode_mask(&mask, w, h);
+        let bits: Vec<u8> = mask.iter().map(|v| v & 1).collect();
+        // number of runs in the bit mask
+        let runs = 1 + bits.windows(2).filter(|p| p[0] != p[1]).count();
+        assert_eq!(rle.len(), 3 * runs, "{name}");
+        assert_eq!(rle_decode_mask(&rle, w, h), bits, "{name}");
+        // run lengths sum to the mask length
+        let total: usize = rle
+            .chunks_exact(3)
+            .map(|t| usize::from(u16::from_le_bytes([t[0], t[1]])))
+            .sum();
+        assert_eq!(total, n, "{name}");
+    }
+    // a run longer than u16::MAX is split
+    let (w, h) = (1000u32, 100u32);
+    let long = vec![1u8; 100_000];
+    let rle = rle_encode_mask(&long, w, h);
+    assert_eq!(rle.len(), 3 * 2);
+    assert_eq!(u16::from_le_bytes([rle[0], rle[1]]), u16::MAX);
+    assert_eq!(
+        u16::from_le_bytes([rle[3], rle[4]]),
+        (100_000 - 65_535) as u16
+    );
+    assert_eq!(rle_decode_mask(&rle, w, h), long);
+    // a mask shorter than width × height encodes only its own length; the
+    // decoder zero-fills the rest and never writes past the frame
+    let short = vec![1u8; 10];
+    let rle = rle_encode_mask(&short, 8, 8);
+    assert_eq!(
+        rle_decode_mask(&rle, 8, 8),
+        [vec![1u8; 10], vec![0u8; 54]].concat()
+    );
+    let oversized = rle_encode_mask(&[1u8; 64], 4, 4); // 16-pixel frame
+    assert_eq!(rle_decode_mask(&oversized, 4, 4), vec![1u8; 16]);
+    assert!(rle_encode_mask(&[], 4, 4).is_empty());
+    assert!(rle_encode_mask(&[1, 1], 0, 4).is_empty());
+    assert_eq!(rle_decode_mask(&[], 4, 4), vec![0u8; 16]);
+    // a truncated trailing triple is ignored
+    assert_eq!(rle_decode_mask(&[2, 0], 4, 1), vec![0u8; 4]);
+}
+
+#[test]
+fn hybrid_transmitter_accounts_every_byte_and_versions_follow_the_deltas() {
+    use libasp::hybrid::{create_person_mask, estimate_savings, HybridTransmitter};
+    use libasp::scene::{PersonMask, SdfSceneDelta, SdfSceneDescriptor};
+
+    let mut asdf = b"ASDF".to_vec();
+    asdf.extend_from_slice(&[1, 0, 0, 0, 3, 0, 0, 0, 0, 0, 0, 0]);
+    asdf.extend_from_slice(&[0xAB; 500]);
+    let scene = SdfSceneDescriptor::new(asdf.clone())
+        .with_bounds([-1.0; 3], [1.0; 3])
+        .with_name("stage");
+    assert!(scene.is_valid_asdf());
+    assert_eq!(scene.asdf_size(), 516);
+    assert!(!SdfSceneDescriptor::new(b"ASDF".to_vec()).is_valid_asdf()); // header needs 16 bytes
+    assert!(!SdfSceneDescriptor::new(vec![b'X'; 32]).is_valid_asdf());
+    let mut scene = scene;
+    scene.scene_version = 7;
+
+    let mask = create_person_mask(&[0, 1, 1, 0, 1, 1, 0, 0], 4, 2, [1, 0, 2, 2], 4);
+    assert_eq!(mask.mask_size(), 3 * 5); // runs: 0 | 11 | 0 | 11 | 00
+    assert_eq!(mask.total_pixels, 8);
+    assert_eq!(mask.foreground_pixels, 4);
+    assert_eq!(mask.coverage(), 0.5);
+    assert_eq!(mask.bandwidth_ratio(8, 2), 0.25);
+    assert_eq!(PersonMask::new([0; 4], vec![]).coverage(), 0.0);
+    assert_eq!(PersonMask::new([0; 4], vec![]).bandwidth_ratio(0, 0), 1.0);
+
+    let (w, h) = (640u32, 360u32);
+    let per_frame_traditional = (w * h * 3 / 20) as usize;
+    let mut tx = HybridTransmitter::new();
+    assert_eq!((tx.sequence(), tx.scene_version()), (0, 0));
+
+    let key = tx.create_keyframe_av(
+        w,
+        h,
+        30.0,
+        scene.clone(),
+        Some(mask.clone()),
+        vec![1; 100],
+        vec![2; 20],
+    );
+    assert!(key.is_keyframe);
+    assert_eq!((key.sequence, key.width, key.height), (1, w, h));
+    assert!(key.sdf_scene.is_some() && key.sdf_delta.is_none());
+    assert_eq!((tx.sequence(), tx.scene_version()), (1, 7));
+
+    let d1 = tx.create_delta_frame(
+        Some(SdfSceneDelta::node_transform(7, vec![3; 40])),
+        None,
+        vec![1; 60],
+        33,
+    );
+    assert!(!d1.is_keyframe);
+    assert_eq!(
+        (d1.sequence, d1.timestamp_ms, d1.width, d1.height),
+        (2, 33, w, h)
+    );
+    assert!(d1.sdf_scene.is_none());
+    assert_eq!(tx.scene_version(), 8);
+    let d2 = tx.create_delta_frame_av(None, Some(mask.clone()), vec![1; 70], vec![2; 10], 66);
+    assert_eq!((d2.sequence, tx.scene_version()), (3, 8));
+    assert!(d2.audio_data.len() == 10 && d2.person_mask.is_some());
+
+    let s = tx.stats();
+    assert_eq!(s.frame_count, 3);
+    assert_eq!((s.frame_width, s.frame_height), (w, h));
+    assert_eq!(s.sdf_scene_bytes, 516);
+    assert_eq!(s.sdf_delta_bytes, 40);
+    assert_eq!(s.person_mask_bytes, 2 * 15);
+    assert_eq!(s.person_video_bytes, 100 + 60 + 70);
+    assert_eq!(s.audio_bytes, 20 + 10);
+    assert_eq!(s.hybrid_total_bytes, 516 + 40 + 30 + 230 + 30);
+    assert_eq!(s.traditional_total_bytes, 3 * per_frame_traditional);
+    let (savings, ratio) = s.savings();
+    let expected_ratio = s.traditional_total_bytes as f64 / s.hybrid_total_bytes as f64;
+    assert!((ratio - expected_ratio).abs() < 1e-9);
+    assert!((savings - (1.0 - 1.0 / expected_ratio) * 100.0).abs() < 1e-9);
+    assert_eq!(
+        libasp::scene::HybridBandwidthStats::default().savings(),
+        (0.0, 1.0)
+    );
+
+    // delta constructors: new version = ref + 1, size = payload length
+    for (delta, ty) in [
+        (
+            SdfSceneDelta::full_replace(3, vec![0; 9]),
+            libasp::scene::SdfDeltaType::FullReplace,
+        ),
+        (
+            SdfSceneDelta::animation_update(3, vec![0; 9]),
+            libasp::scene::SdfDeltaType::AnimationUpdate,
+        ),
+        (
+            SdfSceneDelta::node_transform(3, vec![0; 9]),
+            libasp::scene::SdfDeltaType::NodeTransform,
+        ),
+        (
+            SdfSceneDelta::svo_chunk_delta(3, vec![0; 9]),
+            libasp::scene::SdfDeltaType::SvoChunkDelta,
+        ),
+    ] {
+        assert_eq!(
+            (
+                delta.ref_scene_version,
+                delta.new_scene_version,
+                delta.delta_type,
+                delta.delta_size()
+            ),
+            (3, 4, ty, 9)
+        );
+    }
+
+    // estimate_savings closed form: traditional = W·H/8, hybrid = sdf + P·bpp/8 + P/50
+    let (w, h, cov, sdf, bpp) = (1920u32, 1080u32, 0.25f32, 5000usize, 1.0f32);
+    let total = f64::from(w) * f64::from(h);
+    let person = total * f64::from(cov);
+    let traditional = (total / 8.0) as usize;
+    let hybrid = sdf + (person * f64::from(bpp) / 8.0) as usize + (person / 50.0) as usize;
+    let (sv, r) = estimate_savings(w, h, cov, sdf, bpp);
+    assert!((r - traditional as f64 / hybrid as f64).abs() < 1e-9);
+    assert!((sv - (1.0 - hybrid as f64 / traditional as f64) * 100.0).abs() < 1e-9);
+    // no person and no scene → the hybrid stream is empty, ratio is finite (max(1))
+    let (sv0, r0) = estimate_savings(w, h, 0.0, 0, bpp);
+    assert!((sv0 - 100.0).abs() < 1e-9 && (r0 - traditional as f64).abs() < 1e-9);
+}

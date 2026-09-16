@@ -42,6 +42,8 @@ jobs:
         run: cargo test --lib --no-default-features --features "$ALL_FEATURES"
       - name: Analytic oracle tests (closed-form laws, default config)
         run: cargo test --test analytic_oracle --no-default-features
+      - name: Analytic oracle tests (feature-gated bridges)
+        run: cargo test --test analytic_oracle --no-default-features --features "$ALL_FEATURES"
       - name: Wire roundtrip tests (FlatBuffers full fidelity, bincode path)
         run: cargo test --test wire_roundtrip --no-default-features --features bincode-compat
       - name: Doc tests
