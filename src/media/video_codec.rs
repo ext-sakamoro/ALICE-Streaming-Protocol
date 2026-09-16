@@ -667,6 +667,98 @@ mod tests {
         }
     }
 
+    /// Symbol mapping law: range ≤ 255 → exact offset (scale 0); range > 255 →
+    /// `s = ⌊(v − min)·255/range⌋` and `v' = ⌊s·range/255 + 0.5⌋ + min`, so the
+    /// reconstruction error is below one step (`range/255`) plus the half-unit
+    /// rounding of the decode
+    #[test]
+    fn symbols_are_exact_below_256_levels_and_within_one_step_above() {
+        for coeffs in [
+            vec![-10, -5, 0, 3, 7, 15, -2],
+            vec![0, 255],
+            vec![-128, 127],
+            vec![42],
+        ] {
+            let (symbols, min_val, scale) = coeffs_to_symbols(&coeffs);
+            assert_eq!(scale, 0.0);
+            assert_eq!(min_val, *coeffs.iter().min().unwrap());
+            let expected: Vec<u8> = coeffs.iter().map(|v| (v - min_val) as u8).collect();
+            assert_eq!(symbols, expected);
+            assert_eq!(symbols_to_coeffs(&symbols, min_val, scale), coeffs);
+        }
+        let wide: Vec<i32> = (-600..=600).step_by(7).collect(); // −600 ..= 597
+        let range = (597 + 600) as f32;
+        let (symbols, min_val, scale) = coeffs_to_symbols(&wide);
+        assert_eq!(min_val, -600);
+        assert!((scale - 255.0 / range).abs() < 1e-7);
+        assert_eq!(symbols[0], 0);
+        assert_eq!(*symbols.last().unwrap(), 255);
+        let step = range / 255.0;
+        for (orig, rest) in wide.iter().zip(symbols_to_coeffs(&symbols, min_val, scale)) {
+            assert!(
+                ((orig - rest) as f32).abs() <= step + 0.5,
+                "orig={orig}, restored={rest}"
+            );
+        }
+        assert_eq!(coeffs_to_symbols(&[]), (Vec::new(), 0, 0.0));
+        let hist = build_histogram(&[0, 0, 5, 255, 5, 5]);
+        assert_eq!(
+            (
+                hist.len(),
+                hist[0],
+                hist[5],
+                hist[255],
+                hist.iter().sum::<u32>()
+            ),
+            (256, 2, 3, 1, 6)
+        );
+    }
+
+    /// Wire layout round trip, and every truncation / inflated-length variant
+    /// of the header is rejected instead of allocating or panicking
+    #[test]
+    fn compressed_frame_layout_round_trips_and_rejects_corrupt_lengths() {
+        let frame = CompressedFrame {
+            width: 640,
+            height: 360,
+            q_step: [3, -7, 11],
+            min: [-100, 0, 5],
+            scale: [0.0, 0.2125, 1.5],
+            hist: [vec![1, 2, 3], Vec::new(), vec![u32::MAX; 4]],
+            bitstream: [vec![9u8; 17], vec![0xFF; 1], Vec::new()],
+        };
+        let bytes = pack_compressed_frame(&frame);
+        // 11 header words + 6 length words, then 3 + 4 histogram words and
+        // 17 + 1 bitstream bytes (the empty planes contribute only their length)
+        let expected_len = 17 * 4 + (3 + 4) * 4 + (17 + 1);
+        assert_eq!(bytes.len(), expected_len);
+        assert_eq!(&bytes[..4], &640u32.to_le_bytes());
+        assert_eq!(&bytes[4..8], &360u32.to_le_bytes());
+        assert_eq!(&bytes[12..16], &(-7i32).to_le_bytes());
+        assert_eq!(unpack_compressed_frame(&bytes), Some(frame.clone()));
+        // every proper prefix is rejected
+        for cut in 0..bytes.len() {
+            assert!(
+                unpack_compressed_frame(&bytes[..cut]).is_none(),
+                "prefix {cut} accepted"
+            );
+        }
+        // an inflated histogram length must not allocate the claimed size
+        let mut inflated = bytes.clone();
+        inflated[44..48].copy_from_slice(&(MAX_HISTOGRAM_LEN as u32 + 1).to_le_bytes());
+        assert!(unpack_compressed_frame(&inflated).is_none());
+        let mut inflated = bytes.clone();
+        inflated[44..48].copy_from_slice(&u32::MAX.to_le_bytes());
+        assert!(unpack_compressed_frame(&inflated).is_none());
+        // the maximum histogram length itself is accepted when the bytes are there
+        let big = CompressedFrame {
+            hist: [vec![0; MAX_HISTOGRAM_LEN], Vec::new(), Vec::new()],
+            ..frame.clone()
+        };
+        let big_bytes = pack_compressed_frame(&big);
+        assert_eq!(unpack_compressed_frame(&big_bytes).as_ref(), Some(&big));
+    }
+
     #[test]
     fn test_video_config_defaults() {
         let config = VideoCodecConfig::default();
