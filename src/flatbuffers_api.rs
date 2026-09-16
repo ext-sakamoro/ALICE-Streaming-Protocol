@@ -622,6 +622,630 @@ pub fn create_pong(timestamp_ms: u64) -> Vec<u8> {
 }
 
 // =============================================================================
+// Full-fidelity payload codec (every field the asp.fbs schema carries)
+// =============================================================================
+//
+// `AspPacket::to_bytes` / `from_bytes` go through these two functions. Until
+// 1.1.0 the packet layer used the convenience builders above, which only
+// carry width / height / fps / timestamp (I), ref_sequence + motion vectors (D)
+// and Ping / Pong (S); every other field was dropped on write without an
+// error, a C-Packet was written as a Ping and read back as an empty payload.
+//
+// Fields that have no counterpart in the schema (`sdf_scene`, `sdf_delta`,
+// `person_mask` of the hybrid pipeline) are rejected with
+// `AspError::SerializationError` instead of being dropped; they travel over
+// the `bincode-compat` format (`write_to_buffer_bincode`).
+
+use crate::packet::{
+    AspPayload, CPacketPayload as RustCPacket, ColorPalette as RustPalette,
+    CompressionFormat as RustCompression, CorrectionData as RustCorrection,
+    DPacketPayload as RustDPacket, IPacketPayload as RustIPacket, RegionDelta as RustRegionDelta,
+    RegionDescriptor as RustRegion, RoiRegion as RustRoi, SPacketPayload as RustSPacket, SyncData,
+};
+use crate::types::{
+    AnimationParams as RustAnimation, AspError, EasingType as RustEasing,
+    PatternType as RustPattern, QualityLevel as RustQuality, RoiType as RustRoiType,
+    SyncCommand as RustSyncCommand,
+};
+use flatbuffers::WIPOffset;
+
+fn ser_err(what: &str) -> AspError {
+    AspError::SerializationError(what.to_string())
+}
+
+fn de_err(what: impl std::fmt::Display) -> AspError {
+    AspError::DeserializationError(what.to_string())
+}
+
+fn easing_to_fb(e: RustEasing) -> FbEasingType {
+    FbEasingType(e as i8)
+}
+
+fn easing_from_fb(e: FbEasingType) -> Result<RustEasing, AspError> {
+    Ok(match e {
+        FbEasingType::Linear => RustEasing::Linear,
+        FbEasingType::EaseIn => RustEasing::EaseIn,
+        FbEasingType::EaseOut => RustEasing::EaseOut,
+        FbEasingType::EaseInOut => RustEasing::EaseInOut,
+        FbEasingType::Bounce => RustEasing::Bounce,
+        FbEasingType::Elastic => RustEasing::Elastic,
+        other => return Err(de_err(format!("unknown EasingType {}", other.0))),
+    })
+}
+
+fn compression_from_fb(c: FbCompressionFormat) -> Result<RustCompression, AspError> {
+    Ok(match c {
+        FbCompressionFormat::Raw => RustCompression::Raw,
+        FbCompressionFormat::Rle => RustCompression::Rle,
+        FbCompressionFormat::Lz4 => RustCompression::Lz4,
+        FbCompressionFormat::Zstd => RustCompression::Zstd,
+        FbCompressionFormat::DeltaRle => RustCompression::DeltaRle,
+        other => return Err(de_err(format!("unknown CompressionFormat {}", other.0))),
+    })
+}
+
+fn u8_of<T: Into<i8>>(v: T) -> Result<u8, AspError> {
+    u8::try_from(v.into()).map_err(|_| de_err("negative enum value"))
+}
+
+fn build_palette<'a>(
+    b: &mut FlatBufferBuilder<'a>,
+    p: &RustPalette,
+) -> WIPOffset<generated::ColorPalette<'a>> {
+    let colors: Vec<FbColor> = p.colors.iter().map(color_to_fb).collect();
+    let colors = b.create_vector(&colors);
+    let weights = p.weights.as_ref().map(|w| b.create_vector(w));
+    generated::ColorPalette::create(
+        b,
+        &generated::ColorPaletteArgs {
+            colors: Some(colors),
+            weights,
+        },
+    )
+}
+
+fn read_palette(p: Option<generated::ColorPalette<'_>>) -> RustPalette {
+    p.map_or_else(RustPalette::default, |p| RustPalette {
+        colors: p
+            .colors()
+            .map(|v| v.iter().map(color_from_fb).collect())
+            .unwrap_or_default(),
+        weights: p.weights().map(|v| v.iter().collect()),
+    })
+}
+
+fn build_dct<'a>(
+    b: &mut FlatBufferBuilder<'a>,
+    coeffs: &[(u32, u32, f32)],
+) -> Result<WIPOffset<flatbuffers::Vector<'a, FbDctCoefficient>>, AspError> {
+    let mut v = Vec::with_capacity(coeffs.len());
+    for &(x, y, value) in coeffs {
+        let x = u16::try_from(x).map_err(|_| ser_err("DCT coefficient x exceeds u16"))?;
+        let y = u16::try_from(y).map_err(|_| ser_err("DCT coefficient y exceeds u16"))?;
+        v.push(FbDctCoefficient::new(x, y, value));
+    }
+    Ok(b.create_vector(&v))
+}
+
+fn read_dct(v: Option<flatbuffers::Vector<'_, FbDctCoefficient>>) -> Option<Vec<(u32, u32, f32)>> {
+    v.map(|v| {
+        v.iter()
+            .map(|c| (u32::from(c.x()), u32::from(c.y()), c.value()))
+            .collect()
+    })
+}
+
+fn build_params<'a>(
+    b: &mut FlatBufferBuilder<'a>,
+    params: &[(String, f32)],
+) -> WIPOffset<flatbuffers::Vector<'a, flatbuffers::ForwardsUOffset<generated::Param<'a>>>> {
+    let items: Vec<_> = params
+        .iter()
+        .map(|(k, v)| {
+            let key = b.create_string(k);
+            generated::Param::create(
+                b,
+                &generated::ParamArgs {
+                    key: Some(key),
+                    value: *v,
+                },
+            )
+        })
+        .collect();
+    b.create_vector(&items)
+}
+
+fn read_params(
+    v: Option<flatbuffers::Vector<'_, flatbuffers::ForwardsUOffset<generated::Param<'_>>>>,
+) -> Option<Vec<(String, f32)>> {
+    v.map(|v| {
+        v.iter()
+            .map(|p| (p.key().unwrap_or_default().to_string(), p.value()))
+            .collect()
+    })
+}
+
+fn build_animation<'a>(
+    b: &mut FlatBufferBuilder<'a>,
+    a: &RustAnimation,
+) -> WIPOffset<generated::AnimationParams<'a>> {
+    generated::AnimationParams::create(
+        b,
+        &generated::AnimationParamsArgs {
+            zoom_factor: a.zoom_factor,
+            pan_x: a.pan_x,
+            pan_y: a.pan_y,
+            rotation: a.rotation,
+            duration: a.duration,
+            easing: easing_to_fb(a.easing),
+        },
+    )
+}
+
+fn read_animation(a: generated::AnimationParams<'_>) -> Result<RustAnimation, AspError> {
+    Ok(RustAnimation {
+        zoom_factor: a.zoom_factor(),
+        pan_x: a.pan_x(),
+        pan_y: a.pan_y(),
+        rotation: a.rotation(),
+        duration: a.duration(),
+        easing: easing_from_fb(a.easing())?,
+    })
+}
+
+fn build_region<'a>(
+    b: &mut FlatBufferBuilder<'a>,
+    r: &RustRegion,
+) -> Result<WIPOffset<generated::RegionDescriptor<'a>>, AspError> {
+    let palette = build_palette(b, &r.palette);
+    let dct = match &r.dct_coefficients {
+        Some(c) => Some(build_dct(b, c)?),
+        None => None,
+    };
+    let params = r.params.as_ref().map(|p| build_params(b, p));
+    let bounds = rect_to_fb(&r.bounds);
+    Ok(generated::RegionDescriptor::create(
+        b,
+        &generated::RegionDescriptorArgs {
+            bounds: Some(&bounds),
+            pattern_type: FbPatternType(r.pattern_type as i8),
+            palette: Some(palette),
+            dct_coefficients: dct,
+            texture_id: r.texture_id.unwrap_or(0),
+            params,
+        },
+    ))
+}
+
+fn read_region(r: generated::RegionDescriptor<'_>) -> Result<RustRegion, AspError> {
+    let pattern_type = RustPattern::try_from(u8_of(r.pattern_type().0)?)?;
+    Ok(RustRegion {
+        bounds: r.bounds().map(rect_from_fb).unwrap_or_default(),
+        pattern_type,
+        palette: read_palette(r.palette()),
+        dct_coefficients: read_dct(r.dct_coefficients()),
+        // 0 is the schema default: a Texture region must carry a real id, every
+        // other pattern type has none
+        texture_id: (pattern_type == RustPattern::Texture).then_some(r.texture_id()),
+        params: read_params(r.params()),
+    })
+}
+
+fn build_region_delta<'a>(
+    b: &mut FlatBufferBuilder<'a>,
+    d: &RustRegionDelta,
+) -> Result<WIPOffset<generated::RegionDelta<'a>>, AspError> {
+    let palette_delta = d.palette_delta.as_ref().map(|p| build_palette(b, p));
+    let dct_delta = match &d.dct_delta {
+        Some(c) => Some(build_dct(b, c)?),
+        None => None,
+    };
+    let param_delta = d.param_delta.as_ref().map(|p| build_params(b, p));
+    Ok(generated::RegionDelta::create(
+        b,
+        &generated::RegionDeltaArgs {
+            region_index: d.region_index,
+            palette_delta,
+            dct_delta,
+            param_delta,
+        },
+    ))
+}
+
+fn read_region_delta(d: generated::RegionDelta<'_>) -> RustRegionDelta {
+    RustRegionDelta {
+        region_index: d.region_index(),
+        palette_delta: d.palette_delta().map(|p| read_palette(Some(p))),
+        dct_delta: read_dct(d.dct_delta()),
+        param_delta: read_params(d.param_delta()),
+    }
+}
+
+fn build_roi<'a>(
+    b: &mut FlatBufferBuilder<'a>,
+    r: &RustRoi,
+) -> WIPOffset<generated::RoiRegion<'a>> {
+    let bounds = rect_to_fb(&r.bounds);
+    generated::RoiRegion::create(
+        b,
+        &generated::RoiRegionArgs {
+            bounds: Some(&bounds),
+            roi_type: FbRoiType(r.roi_type as i8),
+            priority: r.priority,
+            confidence: r.confidence,
+        },
+    )
+}
+
+fn read_roi(r: generated::RoiRegion<'_>) -> Result<RustRoi, AspError> {
+    Ok(RustRoi {
+        bounds: r.bounds().map(rect_from_fb).unwrap_or_default(),
+        roi_type: RustRoiType::try_from(u8_of(r.roi_type().0)?)?,
+        priority: r.priority(),
+        confidence: r.confidence(),
+    })
+}
+
+fn build_correction<'a>(
+    b: &mut FlatBufferBuilder<'a>,
+    c: &RustCorrection,
+) -> WIPOffset<generated::CorrectionData<'a>> {
+    let roi = build_roi(b, &c.roi);
+    let pixel_delta = b.create_vector(&c.pixel_delta);
+    generated::CorrectionData::create(
+        b,
+        &generated::CorrectionDataArgs {
+            roi: Some(roi),
+            pixel_delta: Some(pixel_delta),
+            compression: FbCompressionFormat(c.compression as i8),
+        },
+    )
+}
+
+fn read_correction(c: generated::CorrectionData<'_>) -> Result<RustCorrection, AspError> {
+    Ok(RustCorrection {
+        roi: read_roi(
+            c.roi()
+                .ok_or_else(|| de_err("CorrectionData without roi"))?,
+        )?,
+        pixel_delta: c
+            .pixel_delta()
+            .map(|v| v.bytes().to_vec())
+            .unwrap_or_default(),
+        compression: compression_from_fb(c.compression())?,
+    })
+}
+
+fn build_i_packet<'a>(
+    b: &mut FlatBufferBuilder<'a>,
+    p: &RustIPacket,
+) -> Result<WIPOffset<flatbuffers::UnionWIPOffset>, AspError> {
+    if p.sdf_scene.is_some() {
+        return Err(ser_err(
+            "IPacketPayload::sdf_scene has no FlatBuffers representation; use write_to_buffer_bincode",
+        ));
+    }
+    let global_palette = build_palette(b, &p.global_palette);
+    let mut regions = Vec::with_capacity(p.regions.len());
+    for r in &p.regions {
+        regions.push(build_region(b, r)?);
+    }
+    let regions = b.create_vector(&regions);
+    let animation = p.animation.as_ref().map(|a| build_animation(b, a));
+    Ok(generated::IPacketPayload::create(
+        b,
+        &generated::IPacketPayloadArgs {
+            width: p.width,
+            height: p.height,
+            fps: p.fps,
+            quality: FbQualityLevel(p.quality as i8),
+            global_palette: Some(global_palette),
+            regions: Some(regions),
+            animation,
+            timestamp_ms: p.timestamp_ms,
+        },
+    )
+    .as_union_value())
+}
+
+fn read_i_packet_full(fb: generated::IPacketPayload<'_>) -> Result<RustIPacket, AspError> {
+    let mut regions = Vec::new();
+    if let Some(v) = fb.regions() {
+        for r in v.iter() {
+            regions.push(read_region(r)?);
+        }
+    }
+    Ok(RustIPacket {
+        width: fb.width(),
+        height: fb.height(),
+        fps: fb.fps(),
+        quality: RustQuality::try_from(u8_of(fb.quality().0)?)?,
+        global_palette: read_palette(fb.global_palette()),
+        regions,
+        animation: fb.animation().map(read_animation).transpose()?,
+        timestamp_ms: fb.timestamp_ms(),
+        sdf_scene: None,
+    })
+}
+
+fn build_d_packet<'a>(
+    b: &mut FlatBufferBuilder<'a>,
+    p: &RustDPacket,
+) -> Result<WIPOffset<flatbuffers::UnionWIPOffset>, AspError> {
+    if p.sdf_delta.is_some() || p.person_mask.is_some() {
+        return Err(ser_err(
+            "DPacketPayload::sdf_delta / person_mask have no FlatBuffers representation; use write_to_buffer_bincode",
+        ));
+    }
+    let mvs: Vec<FbMotionVector> = p.motion_vectors.iter().map(motion_vector_to_fb).collect();
+    let motion_vectors = b.create_vector(&mvs);
+    let global_motion = p.global_motion.as_ref().map(|a| build_animation(b, a));
+    let mut deltas = Vec::with_capacity(p.region_deltas.len());
+    for d in &p.region_deltas {
+        deltas.push(build_region_delta(b, d)?);
+    }
+    let region_deltas = b.create_vector(&deltas);
+    Ok(generated::DPacketPayload::create(
+        b,
+        &generated::DPacketPayloadArgs {
+            ref_sequence: p.ref_sequence,
+            motion_vectors: Some(motion_vectors),
+            motion_vectors_compact: None,
+            global_motion,
+            region_deltas: Some(region_deltas),
+            timestamp_ms: p.timestamp_ms,
+        },
+    )
+    .as_union_value())
+}
+
+fn read_d_packet_full(fb: generated::DPacketPayload<'_>) -> Result<RustDPacket, AspError> {
+    let mut p = RustDPacket::new(fb.ref_sequence());
+    p.timestamp_ms = fb.timestamp_ms();
+    if let Some(mvs) = fb.motion_vectors() {
+        p.motion_vectors = mvs.iter().map(motion_vector_from_fb).collect();
+    }
+    p.global_motion = fb.global_motion().map(read_animation).transpose()?;
+    if let Some(v) = fb.region_deltas() {
+        p.region_deltas = v.iter().map(read_region_delta).collect();
+    }
+    Ok(p)
+}
+
+fn build_c_packet<'a>(
+    b: &mut FlatBufferBuilder<'a>,
+    p: &RustCPacket,
+) -> WIPOffset<flatbuffers::UnionWIPOffset> {
+    let corrections: Vec<_> = p
+        .corrections
+        .iter()
+        .map(|c| build_correction(b, c))
+        .collect();
+    let corrections = b.create_vector(&corrections);
+    generated::CPacketPayload::create(
+        b,
+        &generated::CPacketPayloadArgs {
+            ref_sequence: p.ref_sequence,
+            corrections: Some(corrections),
+            correction_count: p.correction_count,
+            timestamp_ms: p.timestamp_ms,
+        },
+    )
+    .as_union_value()
+}
+
+fn read_c_packet_full(fb: generated::CPacketPayload<'_>) -> Result<RustCPacket, AspError> {
+    let mut corrections = Vec::new();
+    if let Some(v) = fb.corrections() {
+        for c in v.iter() {
+            corrections.push(read_correction(c)?);
+        }
+    }
+    Ok(RustCPacket {
+        ref_sequence: fb.ref_sequence(),
+        corrections,
+        correction_count: fb.correction_count(),
+        timestamp_ms: fb.timestamp_ms(),
+    })
+}
+
+fn build_s_packet<'a>(
+    b: &mut FlatBufferBuilder<'a>,
+    p: &RustSPacket,
+) -> WIPOffset<flatbuffers::UnionWIPOffset> {
+    let (data_type, data) = match &p.data {
+        SyncData::None => (generated::SyncDataUnion::NONE, None),
+        SyncData::Sequence(sequence) => (
+            generated::SyncDataUnion::SequenceData,
+            Some(
+                generated::SequenceData::create(
+                    b,
+                    &generated::SequenceDataArgs {
+                        sequence: *sequence,
+                    },
+                )
+                .as_union_value(),
+            ),
+        ),
+        SyncData::Bitrate(bitrate_kbps) => (
+            generated::SyncDataUnion::BitrateData,
+            Some(
+                generated::BitrateData::create(
+                    b,
+                    &generated::BitrateDataArgs {
+                        bitrate_kbps: *bitrate_kbps,
+                    },
+                )
+                .as_union_value(),
+            ),
+        ),
+        SyncData::Quality(q) => (
+            generated::SyncDataUnion::QualityData,
+            Some(
+                generated::QualityData::create(
+                    b,
+                    &generated::QualityDataArgs {
+                        quality: FbQualityLevel(*q as i8),
+                    },
+                )
+                .as_union_value(),
+            ),
+        ),
+        SyncData::Latency(latency_ms) => (
+            generated::SyncDataUnion::LatencyData,
+            Some(
+                generated::LatencyData::create(
+                    b,
+                    &generated::LatencyDataArgs {
+                        latency_ms: *latency_ms,
+                    },
+                )
+                .as_union_value(),
+            ),
+        ),
+        SyncData::Custom(bytes) => {
+            let data = b.create_vector(bytes);
+            (
+                generated::SyncDataUnion::CustomData,
+                Some(
+                    generated::CustomData::create(
+                        b,
+                        &generated::CustomDataArgs { data: Some(data) },
+                    )
+                    .as_union_value(),
+                ),
+            )
+        }
+    };
+    generated::SPacketPayload::create(
+        b,
+        &generated::SPacketPayloadArgs {
+            command: FbSyncCommand(p.command as i8),
+            data_type,
+            data,
+            timestamp_ms: p.timestamp_ms,
+        },
+    )
+    .as_union_value()
+}
+
+fn read_s_packet_full(fb: generated::SPacketPayload<'_>) -> Result<RustSPacket, AspError> {
+    let missing = || de_err("SPacketPayload data_type does not match its data");
+    let data = match fb.data_type() {
+        generated::SyncDataUnion::NONE => SyncData::None,
+        generated::SyncDataUnion::SequenceData => {
+            SyncData::Sequence(fb.data_as_sequence_data().ok_or_else(missing)?.sequence())
+        }
+        generated::SyncDataUnion::BitrateData => SyncData::Bitrate(
+            fb.data_as_bitrate_data()
+                .ok_or_else(missing)?
+                .bitrate_kbps(),
+        ),
+        generated::SyncDataUnion::QualityData => SyncData::Quality(RustQuality::try_from(u8_of(
+            fb.data_as_quality_data().ok_or_else(missing)?.quality().0,
+        )?)?),
+        generated::SyncDataUnion::LatencyData => {
+            SyncData::Latency(fb.data_as_latency_data().ok_or_else(missing)?.latency_ms())
+        }
+        generated::SyncDataUnion::CustomData => SyncData::Custom(
+            fb.data_as_custom_data()
+                .ok_or_else(missing)?
+                .data()
+                .map(|v| v.bytes().to_vec())
+                .unwrap_or_default(),
+        ),
+        other => return Err(de_err(format!("unknown SyncDataUnion {}", other.0))),
+    };
+    Ok(RustSPacket {
+        command: RustSyncCommand::try_from(u8_of(fb.command().0)?)?,
+        data,
+        timestamp_ms: fb.timestamp_ms(),
+    })
+}
+
+/// Serialise a packet payload with every field the `asp.fbs` schema carries
+/// (the bytes are a finished `AspPacketPayload` root with the `ASP1` identifier)
+///
+/// # Errors
+///
+/// `AspError::SerializationError` when the payload holds a field the schema
+/// cannot represent (`sdf_scene` / `sdf_delta` / `person_mask`, DCT indices
+/// above `u16::MAX`)
+pub fn encode_payload(payload: &AspPayload) -> Result<Vec<u8>, AspError> {
+    let mut b = FlatBufferBuilder::with_capacity(1024);
+    encode_payload_with_builder(&mut b, payload)?;
+    Ok(b.finished_data().to_vec())
+}
+
+/// [`encode_payload`] into a caller-owned builder (reset first); the finished
+/// bytes are `builder.finished_data()`
+///
+/// # Errors
+///
+/// As [`encode_payload`]
+pub fn encode_payload_with_builder(
+    b: &mut FlatBufferBuilder<'_>,
+    payload: &AspPayload,
+) -> Result<(), AspError> {
+    b.reset();
+    let (payload_type, payload) = match payload {
+        AspPayload::IPacket(p) => (
+            generated::AspPayloadUnion::IPacketPayload,
+            build_i_packet(b, p)?,
+        ),
+        AspPayload::DPacket(p) => (
+            generated::AspPayloadUnion::DPacketPayload,
+            build_d_packet(b, p)?,
+        ),
+        AspPayload::CPacket(p) => (
+            generated::AspPayloadUnion::CPacketPayload,
+            build_c_packet(b, p),
+        ),
+        AspPayload::SPacket(p) => (
+            generated::AspPayloadUnion::SPacketPayload,
+            build_s_packet(b, p),
+        ),
+    };
+    let root = generated::AspPacketPayload::create(
+        b,
+        &generated::AspPacketPayloadArgs {
+            payload_type,
+            payload: Some(payload),
+        },
+    );
+    b.finish(root, Some("ASP1"));
+    Ok(())
+}
+
+/// Inverse of [`encode_payload`]: verifies the buffer and rebuilds the Rust
+/// payload with every field the schema carries
+///
+/// # Errors
+///
+/// `AspError::DeserializationError` for a buffer that fails FlatBuffers
+/// verification, a union whose tag and data disagree, or an enum value outside
+/// the schema
+pub fn decode_payload(bytes: &[u8]) -> Result<AspPayload, AspError> {
+    let packet = read_packet(bytes).map_err(de_err)?;
+    let missing = || de_err("AspPacketPayload payload_type does not match its payload");
+    Ok(match packet.payload_type() {
+        generated::AspPayloadUnion::IPacketPayload => AspPayload::IPacket(read_i_packet_full(
+            packet.payload_as_ipacket_payload().ok_or_else(missing)?,
+        )?),
+        generated::AspPayloadUnion::DPacketPayload => AspPayload::DPacket(read_d_packet_full(
+            packet.payload_as_dpacket_payload().ok_or_else(missing)?,
+        )?),
+        generated::AspPayloadUnion::CPacketPayload => AspPayload::CPacket(read_c_packet_full(
+            packet.payload_as_cpacket_payload().ok_or_else(missing)?,
+        )?),
+        generated::AspPayloadUnion::SPacketPayload => AspPayload::SPacket(read_s_packet_full(
+            packet.payload_as_spacket_payload().ok_or_else(missing)?,
+        )?),
+        other => return Err(de_err(format!("unknown AspPayloadUnion {}", other.0))),
+    })
+}
+
+// =============================================================================
 // Builder Reuse API (Zero-Allocation Hot Loop)
 // =============================================================================
 

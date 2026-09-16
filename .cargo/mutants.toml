@@ -6,4 +6,7 @@
 # - src/python.rs — PyO3 bindings need an interpreter to run and are not
 #   compiled in the mutants feature set (a mutant there would be "missed" for
 #   the wrong reason); they are checked by the python-feature clippy job
-exclude_globs = ["src/generated/**", "src/python.rs"]
+# - src/media/voice_codec.rs — behind the `voice` feature, which is not declared
+#   in 1.x (alice-voice is not on crates.io); the file is never compiled, so
+#   every mutant in it "survives" without meaning anything
+exclude_globs = ["src/generated/**", "src/python.rs", "src/media/voice_codec.rs"]

@@ -602,27 +602,9 @@ impl AspPacket {
     pub fn write_to_buffer(&self, buffer: &mut Vec<u8>) -> AspResult<()> {
         buffer.clear();
 
-        // Serialize payload using FlatBuffers
-        let fb_payload = match &self.payload {
-            AspPayload::IPacket(p) => {
-                flatbuffers_api::create_i_packet(p.width, p.height, p.fps, p.timestamp_ms)
-            }
-            AspPayload::DPacket(p) => {
-                flatbuffers_api::create_d_packet(p.ref_sequence, &p.motion_vectors, p.timestamp_ms)
-            }
-            AspPayload::SPacket(p) => {
-                #[allow(clippy::match_same_arms)]
-                match p.command {
-                    SyncCommand::Ping => flatbuffers_api::create_ping(p.timestamp_ms),
-                    SyncCommand::Pong => flatbuffers_api::create_pong(p.timestamp_ms),
-                    _ => flatbuffers_api::create_ping(p.timestamp_ms), // Fallback
-                }
-            }
-            AspPayload::CPacket(_) => {
-                // C-Packet FlatBuffers serialization (minimal for now)
-                flatbuffers_api::create_ping(0) // Placeholder
-            }
-        };
+        // Serialize payload using FlatBuffers (every field the schema carries;
+        // hybrid-only fields are rejected, see `flatbuffers_api::encode_payload`)
+        let fb_payload = flatbuffers_api::encode_payload(&self.payload)?;
 
         let payload_len = fb_payload.len();
 
@@ -685,76 +667,19 @@ impl AspPacket {
         // Parse FlatBuffers payload
         let payload_data = &data[AspPacketHeader::SIZE..checksum_offset];
 
-        let payload = match header.packet_type {
-            PacketType::IPacket => {
-                let fb = flatbuffers_api::read_i_packet(payload_data)
-                    .map_err(|e| AspError::DeserializationError(e.to_string()))?;
-                let p = IPacketPayload {
-                    width: fb.width(),
-                    height: fb.height(),
-                    fps: fb.fps(),
-                    quality: match fb.quality() {
-                        flatbuffers_api::FbQualityLevel::Low => QualityLevel::Low,
-                        flatbuffers_api::FbQualityLevel::High => QualityLevel::High,
-                        flatbuffers_api::FbQualityLevel::Ultra => QualityLevel::Ultra,
-                        _ => QualityLevel::Medium,
-                    },
-                    global_palette: ColorPalette::default(),
-                    regions: Vec::new(),
-                    animation: None,
-                    timestamp_ms: fb.timestamp_ms(),
-                    sdf_scene: None,
-                };
-                AspPayload::IPacket(p)
-            }
-            PacketType::DPacket => {
-                let fb = flatbuffers_api::read_d_packet(payload_data)
-                    .map_err(|e| AspError::DeserializationError(e.to_string()))?;
-                let mut p = DPacketPayload::new(fb.ref_sequence());
-                p.timestamp_ms = fb.timestamp_ms();
-
-                // Convert motion vectors
-                if let Some(mvs) = fb.motion_vectors() {
-                    for i in 0..mvs.len() {
-                        let mv = mvs.get(i);
-                        p.motion_vectors.push(MotionVector::new(
-                            mv.block_x(),
-                            mv.block_y(),
-                            mv.dx(),
-                            mv.dy(),
-                            mv.sad(),
-                        ));
-                    }
-                }
-                AspPayload::DPacket(p)
-            }
-            PacketType::SPacket => {
-                let fb = flatbuffers_api::read_s_packet(payload_data)
-                    .map_err(|e| AspError::DeserializationError(e.to_string()))?;
-                #[allow(clippy::match_same_arms)]
-                let command = match fb.command() {
-                    flatbuffers_api::FbSyncCommand::RequestKeyframe => SyncCommand::RequestKeyframe,
-                    flatbuffers_api::FbSyncCommand::Ack => SyncCommand::Ack,
-                    flatbuffers_api::FbSyncCommand::Nack => SyncCommand::Nack,
-                    flatbuffers_api::FbSyncCommand::EndOfStream => SyncCommand::EndOfStream,
-                    flatbuffers_api::FbSyncCommand::BitrateAdjust => SyncCommand::BitrateAdjust,
-                    flatbuffers_api::FbSyncCommand::QualityChange => SyncCommand::QualityChange,
-                    flatbuffers_api::FbSyncCommand::Ping => SyncCommand::Ping,
-                    flatbuffers_api::FbSyncCommand::Pong => SyncCommand::Pong,
-                    _ => SyncCommand::Ping,
-                };
-                let p = SPacketPayload {
-                    command,
-                    data: SyncData::None,
-                    timestamp_ms: fb.timestamp_ms(),
-                };
-                AspPayload::SPacket(p)
-            }
-            PacketType::CPacket => {
-                // Minimal C-Packet support for now
-                AspPayload::CPacket(CPacketPayload::new(0))
-            }
+        let payload = flatbuffers_api::decode_payload(payload_data)?;
+        let wire_type = match &payload {
+            AspPayload::IPacket(_) => PacketType::IPacket,
+            AspPayload::DPacket(_) => PacketType::DPacket,
+            AspPayload::CPacket(_) => PacketType::CPacket,
+            AspPayload::SPacket(_) => PacketType::SPacket,
         };
+        if wire_type != header.packet_type {
+            return Err(AspError::DeserializationError(format!(
+                "header says {:?} but the payload is {:?}",
+                header.packet_type, wire_type
+            )));
+        }
 
         Ok(Self { header, payload })
     }

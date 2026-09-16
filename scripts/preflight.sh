@@ -59,6 +59,7 @@ step "tests (no default / docs.rs set / doctests)"
 cargo test --lib --no-default-features
 cargo test --lib --no-default-features --features "$ALL_FEATURES"
 cargo test --test analytic_oracle --no-default-features
+cargo test --test wire_roundtrip --no-default-features --features bincode-compat
 cargo test --doc --no-default-features --features "$ALL_FEATURES"
 
 step "fuzz targets build (nightly)"

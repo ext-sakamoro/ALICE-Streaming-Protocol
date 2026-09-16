@@ -11,18 +11,22 @@
 //! searches on smooth texture; SIMD paths for 8 / 16 blocks agree with a scalar
 //! SAD), CRC-32/ISO-HDLC check value, AIMD bitrate control closed form,
 //! k-means palette on separated clusters (exact means, iteration-count
-//! independent).
+//! independent, weights = cluster fractions), median-cut palette on separated
+//! clusters (exact colours, every split axis), ROI detection (Sobel edge
+//! strength of a step edge = 2·255/(B−2), block contrast = max − min, motion
+//! magnitude = mean |Δ|, thresholds are strict `>`).
 
 #![allow(clippy::too_many_arguments)] // test helpers mirror the estimator signature
 
 use libasp::bitrate::{BitrateConfig, BitrateController};
-use libasp::codec::color::ColorExtractor;
+use libasp::codec::color::{median_cut_palette, ColorExtractor};
 use libasp::codec::dct::{dct2d, idct2d, sparse_dct_decode, sparse_dct_encode, DctTransform};
 use libasp::codec::motion::{
     estimate_motion, estimate_motion_with, MotionEstimator, SearchAlgorithm,
 };
+use libasp::codec::roi::{RoiConfig, RoiDetector};
 use libasp::header::{crc32, AspPacketHeader};
-use libasp::types::{Color, PacketType};
+use libasp::types::{Color, PacketType, Rect, RoiType};
 use std::f64::consts::PI;
 
 fn lcg_bytes(n: usize, seed: u64) -> Vec<u8> {
@@ -496,4 +500,255 @@ fn kmeans_palette_recovers_separated_cluster_means_independent_of_iterations() {
         }
         previous = Some(palette);
     }
+}
+
+// ----------------------------------------------------------------------------
+// Palettes: median cut on separated clusters, k-means weights
+// ----------------------------------------------------------------------------
+
+fn cluster_pixels(centres: &[(u8, u8, u8)], counts: &[usize]) -> Vec<u8> {
+    let mut px = Vec::new();
+    for (&(r, g, b), &n) in centres.iter().zip(counts) {
+        for _ in 0..n {
+            px.extend_from_slice(&[r, g, b]);
+        }
+    }
+    px
+}
+
+fn sorted(mut v: Vec<Color>) -> Vec<Color> {
+    v.sort_by_key(|c| (c.r, c.g, c.b));
+    v
+}
+
+#[test]
+fn median_cut_recovers_separated_colours_exactly_on_every_split_axis() {
+    // Four constant clusters, num_colors = 4 → two splits, every leaf holds one
+    // colour, the leaf mean is that colour. The dominant axis of the first split
+    // differs per set so the r / g / b branches are all exercised
+    let sets: [[(u8, u8, u8); 4]; 3] = [
+        [(10, 5, 5), (90, 5, 5), (170, 5, 5), (250, 5, 5)], // red spread
+        [(5, 10, 5), (5, 90, 5), (5, 170, 5), (5, 250, 5)], // green spread
+        [(5, 5, 10), (5, 5, 90), (5, 5, 170), (5, 5, 250)], // blue spread
+    ];
+    for centres in sets {
+        let px = cluster_pixels(&centres, &[7, 7, 7, 7]);
+        let expected = sorted(
+            centres
+                .iter()
+                .map(|&(r, g, b)| Color::new(r, g, b))
+                .collect(),
+        );
+        assert_eq!(sorted(median_cut_palette(&px, 4)), expected, "{centres:?}");
+        // one colour requested: the mean of everything (integer floor per channel)
+        let n = 28u32;
+        let mean = |f: fn(&(u8, u8, u8)) -> u8| {
+            (centres.iter().map(|c| u32::from(f(c)) * 7).sum::<u32>() / n) as u8
+        };
+        assert_eq!(
+            median_cut_palette(&px, 1),
+            vec![Color::new(mean(|c| c.0), mean(|c| c.1), mean(|c| c.2))],
+            "{centres:?} mean"
+        );
+    }
+    // fewer than one pixel, or zero colours requested → black (documented sentinel)
+    assert_eq!(median_cut_palette(&[1, 2], 4), vec![Color::black()]);
+    assert_eq!(median_cut_palette(&[1, 2, 3], 0), vec![Color::black()]);
+    // a single pixel is its own palette
+    assert_eq!(median_cut_palette(&[9, 8, 7], 4), vec![Color::new(9, 8, 7)]);
+}
+
+#[test]
+fn kmeans_weights_are_cluster_fractions_sorted_descending() {
+    let centres = [(20u8, 30u8, 40u8), (200, 60, 80), (90, 220, 150)];
+    let counts = [300usize, 100, 200];
+    let px = cluster_pixels(&centres, &counts);
+    let (colors, weights) = ColorExtractor::new(3)
+        .with_iterations(10)
+        .with_sampling_rate(1.0)
+        .extract_with_weights(&px);
+    assert_eq!(colors.len(), 3);
+    assert_eq!(weights.len(), 3);
+    // descending fractions 300/600, 200/600, 100/600 attached to the right colours
+    let expected = [
+        (Color::new(20, 30, 40), 0.5f32),
+        (Color::new(90, 220, 150), 1.0 / 3.0),
+        (Color::new(200, 60, 80), 1.0 / 6.0),
+    ];
+    for ((c, w), (ec, ew)) in colors.iter().zip(&weights).zip(&expected) {
+        assert_eq!(c, ec);
+        assert!((w - ew).abs() < 1e-6, "{w} vs {ew}");
+    }
+    assert!((weights.iter().sum::<f32>() - 1.0).abs() < 1e-6);
+    // a plain `extract` is the same palette in the same order
+    assert_eq!(
+        ColorExtractor::new(3)
+            .with_iterations(10)
+            .with_sampling_rate(1.0)
+            .extract(&px),
+        colors
+    );
+}
+
+// ----------------------------------------------------------------------------
+// ROI detection laws (default RoiConfig: block 16, edge > 30, contrast > 50,
+// motion > 20)
+// ----------------------------------------------------------------------------
+
+/// Vertical step edge at column `x0` (0 left of it, 255 from it on)
+fn vertical_step(w: usize, h: usize, x0: usize) -> Vec<u8> {
+    (0..w * h)
+        .map(|i| if i % w >= x0 { 255 } else { 0 })
+        .collect()
+}
+
+/// Horizontal step edge at row `y0`
+fn horizontal_step(w: usize, h: usize, y0: usize) -> Vec<u8> {
+    (0..w * h)
+        .map(|i| if i / w >= y0 { 255 } else { 0 })
+        .collect()
+}
+
+#[test]
+fn flat_frame_has_no_regions_and_a_ramp_is_contrast_only() {
+    let (w, h) = (64usize, 64usize);
+    let det = RoiDetector::default();
+    assert!(det.detect(&vec![77u8; w * h], w, h).is_empty());
+    assert!(det
+        .detect_with_motion(&vec![77u8; w * h], &vec![77u8; w * h], w, h)
+        .is_empty());
+
+    // frame[x] = 4x: gradient 8 per pixel → edge strength 8 (< 30, no edge
+    // region); per-block contrast = 4·15 = 60 (> 50) → a Text region per block
+    // with confidence 60/255
+    let ramp: Vec<u8> = (0..w * h).map(|i| (4 * (i % w)) as u8).collect();
+    let regions = det.detect(&ramp, w, h);
+    assert_eq!(regions.len(), 16);
+    for r in &regions {
+        assert_eq!(r.roi_type, RoiType::Text);
+        assert_eq!((r.bounds.width, r.bounds.height), (16, 16));
+        assert!(
+            (r.confidence - 60.0 / 255.0).abs() < 1e-6,
+            "{}",
+            r.confidence
+        );
+    }
+    // frame[x] = x: gradient 2, contrast 15 → nothing at all
+    let gentle: Vec<u8> = (0..w * h).map(|i| (i % w) as u8).collect();
+    assert!(det.detect(&gentle, w, h).is_empty());
+}
+
+#[test]
+fn step_edge_strength_is_two_times_255_over_block_minus_two() {
+    // Sobel-style |right − left| is 255 at the two columns straddling the edge,
+    // 0 elsewhere; averaged over the (B−2)² interior: 2·255·(B−2)/(B−2)² =
+    // 510/(B−2) = 36 for B = 16. The block also has contrast 255, and the
+    // edge + contrast regions of one block merge into one region with the
+    // maximum confidence (1.0) and the edge type first in sort order
+    let (w, h) = (64usize, 64usize);
+    let det = RoiDetector::default();
+    // (frame, bounds of the i-th region: the edge column / row of blocks)
+    let cases = [
+        (vertical_step(w, h, 40), true),
+        (horizontal_step(w, h, 40), false),
+    ];
+    for (frame, vertical) in cases {
+        let expect_bounds = |i: u32| {
+            if vertical {
+                Rect::new(32, 16 * i, 16, 16)
+            } else {
+                Rect::new(16 * i, 32, 16, 16)
+            }
+        };
+        let mut regions = det.detect(&frame, w, h);
+        regions.sort_by_key(|r| (r.bounds.y, r.bounds.x));
+        assert_eq!(regions.len(), 4, "{regions:?}");
+        for (i, r) in regions.iter().enumerate() {
+            assert_eq!(r.bounds, expect_bounds(i as u32));
+            assert_eq!(r.roi_type, RoiType::Edge);
+            assert!((r.confidence - 1.0).abs() < 1e-6);
+        }
+        // Contrast off: only the edge regions remain, confidence = 36/255
+        let edge_only = RoiDetector::new(RoiConfig {
+            detect_contrast: false,
+            ..RoiConfig::default()
+        });
+        let regions = edge_only.detect(&frame, w, h);
+        assert_eq!(regions.len(), 4);
+        for r in &regions {
+            assert_eq!(r.roi_type, RoiType::Edge);
+            assert!(
+                (r.confidence - 36.0 / 255.0).abs() < 1e-6,
+                "{}",
+                r.confidence
+            );
+        }
+        // Threshold exactly at the strength: strict `>` → nothing
+        let at_threshold = RoiDetector::new(RoiConfig {
+            detect_contrast: false,
+            edge_threshold: 36,
+            ..RoiConfig::default()
+        });
+        assert!(at_threshold.detect(&frame, w, h).is_empty());
+        let below = RoiDetector::new(RoiConfig {
+            detect_contrast: false,
+            edge_threshold: 35,
+            ..RoiConfig::default()
+        });
+        assert_eq!(below.detect(&frame, w, h).len(), 4);
+    }
+    // An edge exactly on a block boundary is invisible to the interior-only
+    // Sobel pass (documented limitation): only the contrast pass sees it
+    let boundary = vertical_step(w, h, 32);
+    let edge_only = RoiDetector::new(RoiConfig {
+        detect_contrast: false,
+        ..RoiConfig::default()
+    });
+    assert!(edge_only.detect(&boundary, w, h).is_empty());
+}
+
+#[test]
+fn motion_magnitude_is_mean_absolute_difference_with_strict_threshold() {
+    let (w, h) = (64usize, 48usize);
+    let prev = vec![100u8; w * h];
+    let det = RoiDetector::default();
+    for d in [19u8, 20, 21, 25, 155] {
+        let mut cur = prev.clone();
+        // one 16×16 block at (bx, by) = (1, 2) raised by d
+        for y in 32..48 {
+            for x in 16..32 {
+                cur[y * w + x] = 100 + d;
+            }
+        }
+        let regions = det.detect_with_motion(&cur, &prev, w, h);
+        if d <= 20 {
+            assert!(regions.is_empty(), "d={d}: {regions:?}");
+        } else {
+            // the raised block is uniform (contrast 0, Sobel 0) and block-aligned,
+            // so the motion block is the only region for every d
+            assert_eq!(regions.len(), 1, "d={d}: {regions:?}");
+            let r = &regions[0];
+            assert_eq!(r.bounds, Rect::new(16, 32, 16, 16));
+            assert_eq!(r.roi_type, RoiType::Motion);
+            assert!(
+                (r.confidence - f32::from(d) / 255.0).abs() < 1e-6,
+                "{}",
+                r.confidence
+            );
+        }
+    }
+    // Half of a block moved by 40: mean |Δ| over the block = 20 → not > 20
+    let mut cur = prev.clone();
+    for y in 32..40 {
+        for x in 16..32 {
+            cur[y * w + x] = 140;
+        }
+    }
+    let regions = RoiDetector::new(RoiConfig {
+        detect_edges: false,
+        detect_contrast: false,
+        ..RoiConfig::default()
+    })
+    .detect_with_motion(&cur, &prev, w, h);
+    assert!(regions.is_empty(), "{regions:?}");
 }

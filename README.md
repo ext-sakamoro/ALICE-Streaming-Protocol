@@ -67,17 +67,20 @@ ALICE Hybrid: SDF background (2-10 KB) + Person wavelet (0.5-2 Mbps)
 | Mask | N/A | **~300 bytes** (RLE) |
 | **Total** | **5-10 Mbps** | **~0.5-2 Mbps** |
 
-## Media Stack (Codec + Voice Integration)
+## Media Stack (Codec Integration)
 
-With the `media-stack` feature, libasp integrates [ALICE-Codec](https://github.com/ext-sakamoro/ALICE-Codec) and [ALICE-Voice](https://github.com/ext-sakamoro/ALICE-Voice) for end-to-end media encoding/decoding within the ASP transport layer.
+With the `media-stack` feature, libasp integrates [ALICE-Codec](https://github.com/ext-sakamoro/ALICE-Codec) for end-to-end video encoding/decoding within the ASP transport layer.
 
 ```toml
 [dependencies]
-libasp = { version = "1.1", features = ["media-stack"] }
-# Or individually:
-# libasp = { version = "1.1", features = ["codec"] }   # Video only
-# libasp = { version = "1.0", features = ["voice"] }   # Voice only
+libasp = { version = "1.1", features = ["media-stack"] }   # = codec
 ```
+
+The voice pipeline below ([ALICE-Voice](https://github.com/ext-sakamoro/ALICE-Voice), LPC parametric) is
+in the source tree behind a `voice` feature that is **not available in 1.x**: `alice-voice` is not on
+crates.io yet, so the feature is not declared in `Cargo.toml`, `src/media/voice_codec.rs` is not
+compiled and the Python `encode_voice` / `decode_voice` functions are not in the wheel It returns
+when `alice-voice` is published
 
 ### Video Codec Pipeline
 
@@ -104,7 +107,7 @@ let compressed = codec.encode_frame(&rgb_data, width, height)?;
 let reconstructed = codec.decode_frame(&compressed)?;
 ```
 
-### Voice Codec Pipeline
+### Voice Codec Pipeline (not built in 1.x, see above)
 
 ```
 PCM f32 → LPC Analysis → Parametric/Spectral Params → Serialized AudioFrame
@@ -138,15 +141,12 @@ let reconstructed = codec.decode(&frame)?;
 import numpy as np
 import libasp
 
-# Video: encode/decode with NumPy zero-copy
+# Video: encode/decode with NumPy zero-copy (`codec` feature)
 rgb = np.array(frame_data, dtype=np.uint8)
-compressed = libasp.encode_video_frame(rgb, width, height, quality=75)
+compressed = libasp.encode_video_frame_wh(rgb, width, height, quality=75)
 reconstructed = libasp.decode_video_frame(compressed)
 
-# Voice: encode/decode
-audio = np.array(samples, dtype=np.float32)
-frame = libasp.encode_voice(audio, sample_rate=16000)
-decoded = libasp.decode_voice(frame)
+# Voice (`voice` feature, not available in 1.x): libasp.encode_voice / decode_voice
 ```
 
 All media Python bindings use `py.detach` (pyo3 0.29) for full GIL release during computation.
@@ -176,6 +176,13 @@ used to read "2.8-5.3x" and "77x" were not reproducible and are stated as measur
 | D | Delta | Incremental updates + motion vectors | 1-10KB |
 | C | Correction | ROI-based pixel corrections | Variable |
 | S | Sync | Flow control commands | < 100 bytes |
+
+`AspPacket::to_bytes` / `from_bytes` (FlatBuffers, `schemas/asp.fbs`) carry every field of the four
+payloads: quality / palette / regions / animation (I), motion vectors / global motion / region deltas
+(D), ROI corrections with pixel data and compression format (C), all eight sync commands with their
+data union (S) The hybrid-streaming fields (`sdf_scene`, `sdf_delta`, `person_mask`) are not in the
+schema: `to_bytes` returns `AspError::SerializationError` for them and they travel over the
+`bincode-compat` path (`write_to_buffer_bincode`) `tests/wire_roundtrip.rs` is the contract
 
 ## Cross-Language Support
 
@@ -462,8 +469,8 @@ pub struct MotionVectorCompact {
 | `simd` | — | Explicit SIMD (auto-detected on most platforms) |
 | `bincode-compat` | bincode | Legacy Rust-only serialization |
 | `codec` | alice-codec | Video codec (3D wavelet + rANS) |
-| `voice` | alice-voice | Voice codec (LPC parametric) |
-| `media-stack` | codec + voice | Full A/V media pipeline |
+| `voice` | alice-voice | Voice codec (LPC parametric) — not declared in 1.x (alice-voice not on crates.io) |
+| `media-stack` | codec | Media pipeline (video; voice rejoins when `alice-voice` is published) |
 | `sync` | alice-sync | ALICE-Sync CRDT embedded in ASP packets |
 | `physics` | alice-physics | Physics state delta → D-packets |
 | `crypto` | alice-crypto | XChaCha20-Poly1305 AEAD encryption |
