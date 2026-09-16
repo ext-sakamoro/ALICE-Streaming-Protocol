@@ -10,3 +10,26 @@
 #   in 1.x (alice-voice is not on crates.io); the file is never compiled, so
 #   every mutant in it "survives" without meaning anything
 exclude_globs = ["src/generated/**", "src/python.rs", "src/media/voice_codec.rs"]
+
+# Output-equivalent mutants in src/codec/motion.rs (2026-09-16 triage of the
+# 16-shard run; each class was checked by hand, the tests that would have to
+# distinguish them cannot observe the difference through the public API):
+# - `delete match arm 16 / 8 in calculate_sad_block`: removes a SIMD dispatch arm,
+#   the scalar fallback computes the same SAD (oracle: SIMD SAD = scalar reference)
+# - `delete - in diamond / hexagon` pattern constants: the small-pattern refinement
+#   crawls to the same minimum within the iteration budget (cost differs, result not)
+# - `replace + with - in three_step`: negates a point-symmetric pattern (same set)
+# - `replace / with * in estimate_motion_with` (blocks_y): blocks outside the frame
+#   are rejected by `sad_at`, only wasted work
+# - pattern_search iteration budget (`max_iterations`, `iterations += 1`, the
+#   `||` in the break condition): the budget is never reached — the large pattern
+#   moves at most 2 px per iteration, so `range` iterations cover the window
+exclude_re = [
+    "delete match arm (16|8) in calculate_sad_block",
+    "delete - in BlockSearch<'_>::(diamond|hexagon)",
+    "replace \\+ with - in BlockSearch<'_>::three_step",
+    "replace / with \\* in estimate_motion_with",
+    "replace \\* with \\+ in BlockSearch<'_>::pattern_search",
+    "replace \\+= with \\*= in BlockSearch<'_>::pattern_search",
+    "replace \\|\\| with && in BlockSearch<'_>::pattern_search",
+]
