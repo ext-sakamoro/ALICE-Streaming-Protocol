@@ -9,6 +9,7 @@ All notable changes to ALICE-Streaming-Protocol will be documented in this file.
 - `packet::AspPacket::write_to_buffer_bincode` created the header placeholder with `set_len` on reserved (uninitialised) bytes; it is zero-filled now (`clippy::uninit_vec`)
 - Doc examples: all 10 `ignore` doctests are real, compiled examples now; `create_d_packet` (3 arguments) and the non-existent `read_motion_vectors` in the crate docs, and the `LossDetector` example (`reorder_tolerance` semantics) were wrong
 - `python`: removed the never-registered `encode_video_frame` placeholder that always returned an error
+- `VideoDecoder::decode_frame` validates the serialised histogram lengths (≤ 65 536 bins per channel) and the remaining payload length before allocating; a truncated or corrupt frame returns `None` instead of allocating up to 4 GiB or panicking on a short slice
 
 ### Added
 - `SearchAlgorithm` is honoured: `FullSearch` (exhaustive, exact global SAD minimum), `ThreeStepSearch` and `HexagonSearch` are implemented; until 1.0.0 every variant ran diamond search (`estimate_motion_parallel` ignored its `_algorithm`, `MotionEstimator::with_algorithm` and the Python `algorithm=` argument had no effect). `estimate_motion_with(…, algorithm, early_threshold)`; Python `estimate_motion_numpy(algorithm=, early_threshold=)`
@@ -23,6 +24,8 @@ All notable changes to ALICE-Streaming-Protocol will be documented in this file.
 - All ALICE sibling dependencies (`alice-codec` / `alice-sync` / `alice-physics` / `alice-crypto`) come from crates.io; the CI "dependency stubs" (empty 0.1.0 crates, which could not even satisfy `alice-physics = "1"`) and the `alice-stubs` action are removed
 - pyo3 / numpy 0.23 → 0.29 (RUSTSEC-2025-0020 / RUSTSEC-2026-0177 resolved, `allow_threads` → `detach`)
 - `rust-toolchain.toml` pin 1.92.0 → 1.98.1
+- `video_codec`: the frame layout is a `CompressedFrame` struct (was a 17-element tuple through `pack` / `unpack`); the tuple made `cargo mutants --list` exhaust memory (return-type replacement candidates are a cartesian product over the tuple elements) and blocked mutation testing of the whole crate
+- Mutation testing (`quality-deep.yml`): 16 shards over the `simd,media-stack,sync,physics,crypto,bincode-compat` build, lib + `analytic_oracle` test set; `src/generated/**` (flatc) and `src/python.rs` (needs an interpreter) are excluded in `.cargo/mutants.toml`
 - README "Performance Highlights": the "CRC32 table 2.8-5.3x faster" and "buffer reuse 77x faster" rows were not reproducible (154 µs vs 150 µs per 64 KiB; 297 ns vs 304 ns per I-packet on Apple M-series) and now state the measured values
 
 ## [1.0.0] - 2026-02-23

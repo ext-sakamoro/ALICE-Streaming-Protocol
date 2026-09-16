@@ -160,25 +160,15 @@ impl VideoEncoder {
         );
 
         // 4. Pack into output: header + histograms + bitstreams
-        Ok(pack_compressed_frame(
-            width as u32,
-            height as u32,
-            step,
-            step,
-            step,
-            y_result.min_val,
-            co_result.min_val,
-            cg_result.min_val,
-            y_result.scale,
-            co_result.scale,
-            cg_result.scale,
-            &y_result.histogram,
-            &co_result.histogram,
-            &cg_result.histogram,
-            &y_result.bitstream,
-            &co_result.bitstream,
-            &cg_result.bitstream,
-        ))
+        Ok(pack_compressed_frame(&CompressedFrame {
+            width: width as u32,
+            height: height as u32,
+            q_step: [step; 3],
+            min: [y_result.min_val, co_result.min_val, cg_result.min_val],
+            scale: [y_result.scale, co_result.scale, cg_result.scale],
+            hist: [y_result.histogram, co_result.histogram, cg_result.histogram],
+            bitstream: [y_result.bitstream, co_result.bitstream, cg_result.bitstream],
+        }))
     }
 
     /// Encode only the person region from a full frame using segmentation.
@@ -266,25 +256,15 @@ impl VideoDecoder {
     /// truncated or inconsistent
     #[must_use]
     pub fn decode_frame(&self, compressed: &[u8]) -> Option<(Vec<u8>, u32, u32)> {
-        let (
+        let CompressedFrame {
             width,
             height,
-            q_step_y,
-            q_step_co,
-            q_step_cg,
-            y_min,
-            co_min,
-            cg_min,
-            y_scale,
-            co_scale,
-            cg_scale,
-            y_hist,
-            co_hist,
-            cg_hist,
-            bs_y,
-            bs_co,
-            bs_cg,
-        ) = unpack_compressed_frame(compressed)?;
+            q_step: [q_step_y, q_step_co, q_step_cg],
+            min: [y_min, co_min, cg_min],
+            scale: [y_scale, co_scale, cg_scale],
+            hist: [y_hist, co_hist, cg_hist],
+            bitstream: [bs_y, bs_co, bs_cg],
+        } = unpack_compressed_frame(compressed)?;
 
         let w = width as usize;
         let h = height as usize;
@@ -484,48 +464,50 @@ fn build_histogram(symbols: &[u8]) -> Vec<u32> {
 /// [4: y_scale][4: co_scale][4: cg_scale]
 /// [4: y_hist_len][y_hist...][4: co_hist_len][co_hist...][4: cg_hist_len][cg_hist...]
 /// [4: bs_y_len][bs_y...][4: bs_co_len][bs_co...][4: bs_cg_len][bs_cg...]
-#[inline]
-#[allow(clippy::too_many_arguments)] // the packed frame header fields, one call site
-fn pack_compressed_frame(
+/// One encoded frame: the packed header fields plus the per-plane
+/// (Y, Co, Cg) histograms and rANS bitstreams
+///
+/// Wire layout (little-endian): `width u32 · height u32 · q_step[3] i32 ·
+/// min[3] i32 · scale[3] f32` (44 bytes), then per plane `len u32 +
+/// histogram u32 × len` (always 256 entries), then per plane `len u32 +
+/// bitstream bytes`
+#[derive(Debug, Clone, PartialEq)]
+struct CompressedFrame {
     width: u32,
     height: u32,
-    q_step_y: i32,
-    q_step_co: i32,
-    q_step_cg: i32,
-    y_min: i32,
-    co_min: i32,
-    cg_min: i32,
-    y_scale: f32,
-    co_scale: f32,
-    cg_scale: f32,
-    y_hist: &[u32],
-    co_hist: &[u32],
-    cg_hist: &[u32],
-    bs_y: &[u8],
-    bs_co: &[u8],
-    bs_cg: &[u8],
-) -> Vec<u8> {
+    q_step: [i32; 3],
+    min: [i32; 3],
+    scale: [f32; 3],
+    hist: [Vec<u32>; 3],
+    bitstream: [Vec<u8>; 3],
+}
+
+/// Largest histogram the decoder accepts (the encoder always writes 256)
+const MAX_HISTOGRAM_LEN: usize = 65_536;
+
+#[inline]
+fn pack_compressed_frame(frame: &CompressedFrame) -> Vec<u8> {
     let mut out = Vec::with_capacity(
         44 + // fixed header
-        (256 * 4) * 3 + // histograms
-        bs_y.len() + bs_co.len() + bs_cg.len() + 12, // bitstreams + lengths
+        (256 * 4 + 4) * 3 + // histograms
+        frame.bitstream.iter().map(Vec::len).sum::<usize>() + 12, // bitstreams + lengths
     );
 
     // Header (44 bytes)
-    out.extend_from_slice(&width.to_le_bytes());
-    out.extend_from_slice(&height.to_le_bytes());
-    out.extend_from_slice(&q_step_y.to_le_bytes());
-    out.extend_from_slice(&q_step_co.to_le_bytes());
-    out.extend_from_slice(&q_step_cg.to_le_bytes());
-    out.extend_from_slice(&y_min.to_le_bytes());
-    out.extend_from_slice(&co_min.to_le_bytes());
-    out.extend_from_slice(&cg_min.to_le_bytes());
-    out.extend_from_slice(&y_scale.to_le_bytes());
-    out.extend_from_slice(&co_scale.to_le_bytes());
-    out.extend_from_slice(&cg_scale.to_le_bytes());
+    out.extend_from_slice(&frame.width.to_le_bytes());
+    out.extend_from_slice(&frame.height.to_le_bytes());
+    for q in frame.q_step {
+        out.extend_from_slice(&q.to_le_bytes());
+    }
+    for m in frame.min {
+        out.extend_from_slice(&m.to_le_bytes());
+    }
+    for sc in frame.scale {
+        out.extend_from_slice(&sc.to_le_bytes());
+    }
 
     // Histograms (always 256 entries each)
-    for hist in [y_hist, co_hist, cg_hist] {
+    for hist in &frame.hist {
         let len = hist.len() as u32;
         out.extend_from_slice(&len.to_le_bytes());
         for &h in hist {
@@ -534,7 +516,7 @@ fn pack_compressed_frame(
     }
 
     // Bitstreams
-    for bs in [bs_y, bs_co, bs_cg] {
+    for bs in &frame.bitstream {
         let len = bs.len() as u32;
         out.extend_from_slice(&len.to_le_bytes());
         out.extend_from_slice(bs);
@@ -543,29 +525,10 @@ fn pack_compressed_frame(
     out
 }
 
-/// Unpack compressed frame — returns all components or None on invalid data
-#[allow(clippy::type_complexity)]
-fn unpack_compressed_frame(
-    data: &[u8],
-) -> Option<(
-    u32,
-    u32, // width, height
-    i32,
-    i32,
-    i32, // q_step_y, q_step_co, q_step_cg
-    i32,
-    i32,
-    i32, // y_min, co_min, cg_min
-    f32,
-    f32,
-    f32, // y_scale, co_scale, cg_scale
-    Vec<u32>,
-    Vec<u32>,
-    Vec<u32>, // histograms
-    Vec<u8>,
-    Vec<u8>,
-    Vec<u8>, // bitstreams
-)> {
+/// Unpack a compressed frame — `None` on truncated or inconsistent data
+/// (every length is validated against the remaining bytes before anything is
+/// allocated, so a hostile length field cannot trigger a huge allocation)
+fn unpack_compressed_frame(data: &[u8]) -> Option<CompressedFrame> {
     if data.len() < 44 {
         return None;
     }
@@ -580,47 +543,42 @@ fn unpack_compressed_frame(
         *pos += 4;
         Some(v)
     };
-    let read_i32 = |data: &[u8], pos: &mut usize| -> Option<i32> {
-        if *pos + 4 > data.len() {
-            return None;
-        }
-        let v = i32::from_le_bytes(data[*pos..*pos + 4].try_into().ok()?);
-        *pos += 4;
-        Some(v)
-    };
-    let read_f32 = |data: &[u8], pos: &mut usize| -> Option<f32> {
-        if *pos + 4 > data.len() {
-            return None;
-        }
-        let v = f32::from_le_bytes(data[*pos..*pos + 4].try_into().ok()?);
-        *pos += 4;
-        Some(v)
-    };
+    let read_i32 =
+        |data: &[u8], pos: &mut usize| -> Option<i32> { read_u32(data, pos).map(|v| v as i32) };
+    let read_f32 =
+        |data: &[u8], pos: &mut usize| -> Option<f32> { read_u32(data, pos).map(f32::from_bits) };
 
     let width = read_u32(data, &mut pos)?;
     let height = read_u32(data, &mut pos)?;
-    let q_step_y = read_i32(data, &mut pos)?;
-    let q_step_co = read_i32(data, &mut pos)?;
-    let q_step_cg = read_i32(data, &mut pos)?;
-    let y_min = read_i32(data, &mut pos)?;
-    let co_min = read_i32(data, &mut pos)?;
-    let cg_min = read_i32(data, &mut pos)?;
-    let y_scale = read_f32(data, &mut pos)?;
-    let co_scale = read_f32(data, &mut pos)?;
-    let cg_scale = read_f32(data, &mut pos)?;
+    let mut q_step = [0i32; 3];
+    for q in &mut q_step {
+        *q = read_i32(data, &mut pos)?;
+    }
+    let mut min = [0i32; 3];
+    for m in &mut min {
+        *m = read_i32(data, &mut pos)?;
+    }
+    let mut scale = [0f32; 3];
+    for sc in &mut scale {
+        *sc = read_f32(data, &mut pos)?;
+    }
 
     let read_hist = |data: &[u8], pos: &mut usize| -> Option<Vec<u32>> {
         let len = read_u32(data, pos)? as usize;
+        if len > MAX_HISTOGRAM_LEN || *pos + len * 4 > data.len() {
+            return None;
+        }
         let mut hist = Vec::with_capacity(len);
         for _ in 0..len {
             hist.push(read_u32(data, pos)?);
         }
         Some(hist)
     };
-
-    let y_hist = read_hist(data, &mut pos)?;
-    let co_hist = read_hist(data, &mut pos)?;
-    let cg_hist = read_hist(data, &mut pos)?;
+    let hist = [
+        read_hist(data, &mut pos)?,
+        read_hist(data, &mut pos)?,
+        read_hist(data, &mut pos)?,
+    ];
 
     let read_bytes = |data: &[u8], pos: &mut usize| -> Option<Vec<u8>> {
         let len = read_u32(data, pos)? as usize;
@@ -631,15 +589,21 @@ fn unpack_compressed_frame(
         *pos += len;
         Some(bytes)
     };
+    let bitstream = [
+        read_bytes(data, &mut pos)?,
+        read_bytes(data, &mut pos)?,
+        read_bytes(data, &mut pos)?,
+    ];
 
-    let bs_y = read_bytes(data, &mut pos)?;
-    let bs_co = read_bytes(data, &mut pos)?;
-    let bs_cg = read_bytes(data, &mut pos)?;
-
-    Some((
-        width, height, q_step_y, q_step_co, q_step_cg, y_min, co_min, cg_min, y_scale, co_scale,
-        cg_scale, y_hist, co_hist, cg_hist, bs_y, bs_co, bs_cg,
-    ))
+    Some(CompressedFrame {
+        width,
+        height,
+        q_step,
+        min,
+        scale,
+        hist,
+        bitstream,
+    })
 }
 
 #[cfg(test)]

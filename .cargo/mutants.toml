@@ -1,4 +1,9 @@
 # cargo-mutants configuration (quality-deep.yml)
-# flatc-generated FlatBuffers code is not a mutation target (regenerated from
-# schemas/asp.fbs; its correctness is the verifier + the round-trip tests)
-exclude_globs = ["src/generated/**"]
+#
+# Excluded from mutation (documented, not hidden):
+# - src/generated/** — flatc output, regenerated from schemas/asp.fbs; its
+#   correctness is the FlatBuffers verifier + the round-trip tests
+# - src/python.rs — PyO3 bindings need an interpreter to run and are not
+#   compiled in the mutants feature set (a mutant there would be "missed" for
+#   the wrong reason); they are checked by the python-feature clippy job
+exclude_globs = ["src/generated/**", "src/python.rs"]
