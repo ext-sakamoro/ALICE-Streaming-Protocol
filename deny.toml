@@ -31,13 +31,7 @@ ignore = [
     # bincode 2.x への移行は breaking change のため v2.0 で対応予定
     # DoS 対策として `.with_limit::<N>()` 相当の入力サイズ上限を採用
     "RUSTSEC-2025-0141",
-    # pyo3 0.23.x Python::detach thread-safety (upgrade to >=0.24.1)
-    # pyo3 0.29 (Sync bound 追加) への major upgrade は Python binding API
-    # 破壊的変更を含むため v2.0 で対応 短期は Python::detach 使用箇所ゼロを維持
-    "RUSTSEC-2025-0020",
-    # pyo3 0.23.x Py<T> Sync bound 不足 (upgrade to >=0.29.0)
-    # 同上、v2.0 での pyo3 0.29 移行時に解消
-    "RUSTSEC-2026-0177",
+    # (pyo3 RUSTSEC-2025-0020 / 2026-0177 は 1.1.0 で pyo3 0.29 に上げて解消)
 ]
 
 # ---------------------------------------------------------------------------

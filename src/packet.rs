@@ -11,12 +11,15 @@
 //! By default, packets are serialized using `FlatBuffers` for cross-language
 //! compatibility. Enable the `bincode-compat` feature for legacy bincode support.
 //!
-//! ```rust,ignore
-//! // FlatBuffers (default, cross-language)
-//! let bytes = packet.to_bytes()?;
+//! ```rust
+//! use libasp::{AspPacket, IPacketPayload};
 //!
-//! // With bincode-compat feature enabled:
-//! let bytes = packet.to_bytes_bincode()?;
+//! let packet = AspPacket::create_i_packet(1, IPacketPayload::new(640, 480, 30.0)).unwrap();
+//! // FlatBuffers (default, cross-language)
+//! let bytes = packet.to_bytes().unwrap();
+//! assert_eq!(AspPacket::from_bytes(&bytes).unwrap().header.sequence, 1);
+//! # #[cfg(feature = "bincode-compat")]
+//! # { let _legacy = packet.to_bytes_bincode().unwrap(); }
 //! ```
 
 use crate::flatbuffers_api;
@@ -843,20 +846,16 @@ use flatbuffers::FlatBufferBuilder;
 ///
 /// # Example
 ///
-/// ```rust,ignore
-/// use libasp::PacketEncoder;
+/// ```rust
+/// use libasp::{PacketEncoder, types::MotionVector};
 ///
 /// let mut encoder = PacketEncoder::new();
 ///
-/// // Hot loop - no allocations!
-/// for frame in frames {
-///     let bytes = encoder.encode_d_packet(
-///         sequence,
-///         frame.ref_seq,
-///         &frame.mvs,
-///         frame.timestamp_ms,
-///     );
-///     socket.send(bytes)?;
+/// // Hot loop - no allocations after the first packet
+/// let frames = [(1u32, vec![MotionVector::new(0, 0, 2, 0, 5)], 33u64), (2, vec![], 66)];
+/// for (sequence, (ref_seq, mvs, timestamp_ms)) in (10u32..).zip(&frames) {
+///     let bytes = encoder.encode_d_packet(sequence, *ref_seq, mvs, *timestamp_ms);
+///     assert!(!bytes.is_empty()); // socket.send(bytes)
 /// }
 /// ```
 pub struct PacketEncoder {
@@ -1066,10 +1065,10 @@ impl AspPacket {
 
         let estimated = self.estimated_size();
         buffer.reserve(estimated);
-
-        unsafe {
-            buffer.set_len(AspPacketHeader::SIZE);
-        }
+        // Header placeholder (overwritten below once the payload length is
+        // known); zero-filled rather than `set_len` so the bytes are never
+        // uninitialised
+        buffer.resize(AspPacketHeader::SIZE, 0);
 
         let payload_start = AspPacketHeader::SIZE;
         match &self.payload {

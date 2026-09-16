@@ -25,14 +25,16 @@
 //! (C++, Go, Java, Python, TypeScript, etc.). The schema is defined in
 //! `schemas/asp.fbs`.
 //!
-//! ```rust,ignore
-//! use libasp::flatbuffers_api;
+//! ```rust
+//! use libasp::{flatbuffers_api, types::MotionVector};
 //!
 //! // Create D-Packet with motion vectors (zero-copy serialization)
-//! let bytes = flatbuffers_api::create_d_packet(&motion_vectors, ref_sequence);
+//! let motion_vectors = [MotionVector::new(0, 0, 3, -1, 12)];
+//! let bytes = flatbuffers_api::create_d_packet(42, &motion_vectors, 0);
 //!
 //! // Read motion vectors (zero-copy access - no deserialization!)
-//! let mvs = flatbuffers_api::read_motion_vectors(&bytes);
+//! let d = flatbuffers_api::read_d_packet(&bytes).unwrap();
+//! assert_eq!(d.motion_vectors().unwrap().len(), 1);
 //! ```
 //!
 //! # Performance
@@ -45,7 +47,7 @@
 //!
 //! # Usage
 //!
-//! ```rust,ignore
+//! ```rust
 //! use libasp::{AspPacket, IPacketPayload, PacketType};
 //!
 //! // Create an I-Packet (keyframe)

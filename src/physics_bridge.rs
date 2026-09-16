@@ -4,7 +4,7 @@
 //! deterministic physics simulations over the network.
 
 use crate::{AspPacket, DPacketPayload, MotionVector};
-use alice_physics::{Fix128, PhysicsWorld, RigidBody, Vec3Fix};
+use alice_physics::PhysicsWorld;
 
 /// Snapshot of physics body positions for delta computation.
 pub struct PhysicsSnapshot {
@@ -108,6 +108,7 @@ pub fn d_packet_to_body_deltas(
 mod tests {
     use super::*;
     use alice_physics::PhysicsConfig;
+    use alice_physics::{Fix128, RigidBody, Vec3Fix};
 
     #[test]
     fn test_physics_snapshot_delta() {

@@ -5,7 +5,7 @@
 //!
 //! # 使い方
 //!
-//! ```rust,ignore
+//! ```rust
 //! use libasp::congestion::CongestionController;
 //!
 //! let mut cc = CongestionController::new(1400); // MSS = 1400 bytes

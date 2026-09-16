@@ -415,7 +415,7 @@ fn merge_overlapping_regions(regions: &mut Vec<RoiRegion>) {
     }
 
     // Sort by area (larger regions first)
-    regions.sort_by(|a, b| b.bounds.area().cmp(&a.bounds.area()));
+    regions.sort_by_key(|r| std::cmp::Reverse(r.bounds.area()));
 
     // Simple greedy merge
     let mut merged = Vec::new();

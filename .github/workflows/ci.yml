@@ -1,14 +1,28 @@
 name: CI
 
+# Every step here is mirrored in scripts/preflight.sh (run before `git push`):
+# a step that is not in preflight.sh is a step that can only fail remotely.
+#
+# 2026-09-16: the "dependency stubs" step (empty 0.1.0 sibling crates) is gone —
+# every ALICE sibling is on crates.io, so feature builds compile against the
+# real crates (canonical template trap #45); `continue-on-error` on feature
+# builds is gone as well (trap #22).
+
 on:
   push:
     branches: [main]
   pull_request:
     branches: [main]
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 env:
   CARGO_TERM_COLOR: always
-  PYO3_USE_ABI3_FORWARD_COMPATIBILITY: 1
+  # docs.rs feature set (Cargo.toml [package.metadata.docs.rs]); python / wasm
+  # are bindings that need their own host and are checked separately
+  ALL_FEATURES: simd,media-stack,sync,physics,crypto,bincode-compat
 
 jobs:
   test:
@@ -17,115 +31,81 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [macos-latest, ubuntu-latest]
+        os: [ubuntu-latest, macos-latest, windows-latest]
     steps:
       - uses: actions/checkout@v5
-
-      - name: Install Rust toolchain
-        uses: dtolnay/rust-toolchain@stable
-
+      - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
-
-      - name: Create dependency stubs
-        shell: bash
-        run: |
-          for crate_info in \
-            "ALICE-Codec:alice-codec" \
-            "ALICE-Voice:alice-voice" \
-            "ALICE-Sync:alice-sync" \
-            "ALICE-Physics:alice-physics" \
-            "ALICE-Crypto:alice-crypto"; do
-            dir=$(echo "$crate_info" | cut -d: -f1)
-            pkg=$(echo "$crate_info" | cut -d: -f2)
-            mkdir -p "../$dir/src"
-            cat > "../$dir/Cargo.toml" << TOML
-          [package]
-          name = "$pkg"
-          version = "0.1.0"
-          edition = "2021"
-          [features]
-          default = []
-          std = []
-          [lib]
-          path = "src/lib.rs"
-          TOML
-            echo "" > "../$dir/src/lib.rs"
-          done
-
-      - name: Build (no default features) [T0]
-        run: cargo build --lib --no-default-features
-
-      - name: Test (default = python) [T1]
-        run: cargo test --lib
-
-      - name: Build (simd) [T3]
-        run: cargo build --lib --no-default-features --features "simd"
-
-      - name: Build (media-stack) [T2]
-        run: cargo build --lib --no-default-features --features "media-stack"
-        continue-on-error: true
-
-      - name: Build (integration bridges) [T3]
-        run: cargo build --lib --no-default-features --features "sync,physics,crypto"
-        continue-on-error: true
-
-      - name: Build (bincode-compat) [T3]
-        run: cargo build --lib --no-default-features --features "bincode-compat"
-        continue-on-error: true
+      - name: Test (no default features)
+        run: cargo test --lib --no-default-features
+      - name: Test (docs.rs feature set)
+        run: cargo test --lib --no-default-features --features "$ALL_FEATURES"
+      - name: Doc tests
+        run: cargo test --doc --no-default-features --features "$ALL_FEATURES"
 
   clippy:
-    name: Clippy
+    name: Clippy (-D warnings)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
-
-      - name: Install Rust toolchain
-        uses: dtolnay/rust-toolchain@stable
-        with:
-          components: clippy
-
+      - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
+      - name: clippy (no default features, all targets)
+        run: cargo clippy --lib --all-targets --no-default-features -- -D warnings
+      - name: clippy (docs.rs feature set, all targets)
+        run: cargo clippy --lib --all-targets --no-default-features --features "$ALL_FEATURES" -- -D warnings
+      # PyO3 extension-module needs no interpreter to type-check
+      - name: clippy (python bindings)
+        run: cargo clippy --lib --no-default-features --features "python,$ALL_FEATURES" -- -D warnings
 
-      - name: Create dependency stubs
-        run: |
-          for crate_info in \
-            "ALICE-Codec:alice-codec" \
-            "ALICE-Voice:alice-voice" \
-            "ALICE-Sync:alice-sync" \
-            "ALICE-Physics:alice-physics" \
-            "ALICE-Crypto:alice-crypto"; do
-            dir=$(echo "$crate_info" | cut -d: -f1)
-            pkg=$(echo "$crate_info" | cut -d: -f2)
-            mkdir -p "../$dir/src"
-            cat > "../$dir/Cargo.toml" << TOML
-          [package]
-          name = "$pkg"
-          version = "0.1.0"
-          edition = "2021"
-          [features]
-          default = []
-          std = []
-          [lib]
-          path = "src/lib.rs"
-          TOML
-            echo "" > "../$dir/src/lib.rs"
-          done
+  msrv:
+    name: MSRV (rust-version = 1.87)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - name: Install MSRV toolchain
+        uses: dtolnay/rust-toolchain@1.87
+      - uses: Swatinem/rust-cache@v2
+      # `rust-version` is only true if this compiles; bump both together (trap #27 / #35)
+      - name: cargo check on MSRV (no default features)
+        run: cargo +1.87 check --lib --locked --no-default-features
+      - name: cargo check on MSRV (docs.rs feature set)
+        run: cargo +1.87 check --lib --locked --no-default-features --features "$ALL_FEATURES"
 
-      - name: Clippy
-        run: cargo clippy --lib --no-default-features -- --cap-lints warn
-        continue-on-error: true
+  feature-powerset:
+    name: Feature powerset (cargo-hack)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Install cargo-hack
+        uses: taiki-e/install-action@cargo-hack
+      # depth 2 over the library features; python / wasm / all-bridges (alias)
+      # and the raw optional-dep features are excluded
+      - name: Powerset (depth 2)
+        run: >
+          cargo hack check --lib --feature-powerset --depth 2
+          --exclude-features python,wasm,all-bridges,pyo3,numpy,wasm-bindgen,js-sys,web-sys
+
+  doc:
+    name: Doc (RUSTDOCFLAGS=-Dwarnings)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: cargo doc (docs.rs feature set)
+        run: RUSTDOCFLAGS="-Dwarnings" cargo doc --lib --no-deps --no-default-features --features "$ALL_FEATURES"
 
   fmt:
     name: Format
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
-
-      - name: Install Rust toolchain
-        uses: dtolnay/rust-toolchain@stable
+      - uses: dtolnay/rust-toolchain@stable
         with:
           components: rustfmt
-
       - name: Check formatting
         run: cargo fmt -- --check
 

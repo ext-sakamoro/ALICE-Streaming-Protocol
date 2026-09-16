@@ -151,11 +151,17 @@ pub fn rect_from_fb(r: &FbRect) -> RustRect {
 ///
 /// # Example
 ///
-/// ```rust,ignore
+/// ```rust
+/// use libasp::flatbuffers_api::{read_d_packet, DPacketBuilder};
+/// use libasp::types::MotionVector;
+///
+/// let mvs = [MotionVector::new(0, 0, 3, -2, 10), MotionVector::new(1, 0, 0, 1, 4)];
 /// let bytes = DPacketBuilder::new(1)
 ///     .motion_vectors(&mvs)
 ///     .timestamp_ms(12345)
 ///     .build();
+/// let d = read_d_packet(&bytes).unwrap();
+/// assert_eq!(d.motion_vectors().unwrap().len(), 2);
 /// ```
 pub struct DPacketBuilder<'a> {
     builder: FlatBufferBuilder<'a>,
@@ -499,11 +505,15 @@ pub fn read_packet(bytes: &[u8]) -> FbResult<AspPacketPayload<'_>> {
 ///
 /// # Example
 ///
-/// ```rust,ignore
-/// let d_packet = read_d_packet(&bytes)?;
+/// ```rust
+/// use libasp::flatbuffers_api::{create_d_packet, read_d_packet};
+/// use libasp::types::MotionVector;
+///
+/// let bytes = create_d_packet(7, &[MotionVector::new(2, 3, -1, 4, 9)], 0);
+/// let d_packet = read_d_packet(&bytes).unwrap();
 /// let mvs = d_packet.motion_vectors().unwrap();
 /// for mv in mvs.iter() {
-///     println!("dx={}, dy={}", mv.dx(), mv.dy());
+///     assert_eq!((mv.dx(), mv.dy()), (-1, 4));
 /// }
 /// ```
 ///
@@ -626,17 +636,20 @@ pub fn create_pong(timestamp_ms: u64) -> Vec<u8> {
 ///
 /// # Example
 ///
-/// ```rust,ignore
+/// ```rust
 /// use flatbuffers::FlatBufferBuilder;
 /// use libasp::flatbuffers_api::encode_d_packet_with_builder;
+///
+/// use libasp::types::MotionVector;
 ///
 /// // Create builder once
 /// let mut builder = FlatBufferBuilder::with_capacity(4096);
 ///
-/// // Reuse in hot loop
-/// for frame in frames {
-///     let bytes = encode_d_packet_with_builder(&mut builder, frame.ref_seq, &frame.mvs, frame.ts);
-///     socket.send(bytes)?;
+/// // Reuse in hot loop (one allocation for the whole stream)
+/// let frames = [(1u32, vec![MotionVector::new(0, 0, 1, 1, 2)], 33u64), (2, vec![], 66)];
+/// for (ref_seq, mvs, ts) in &frames {
+///     let bytes = encode_d_packet_with_builder(&mut builder, *ref_seq, mvs, *ts);
+///     assert!(!bytes.is_empty()); // socket.send(bytes)
 /// }
 /// ```
 #[inline]

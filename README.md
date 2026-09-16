@@ -73,9 +73,9 @@ With the `media-stack` feature, libasp integrates [ALICE-Codec](https://github.c
 
 ```toml
 [dependencies]
-libasp = { version = "1.0", features = ["media-stack"] }
+libasp = { version = "1.1", features = ["media-stack"] }
 # Or individually:
-# libasp = { version = "1.0", features = ["codec"] }   # Video only
+# libasp = { version = "1.1", features = ["codec"] }   # Video only
 # libasp = { version = "1.0", features = ["voice"] }   # Voice only
 ```
 

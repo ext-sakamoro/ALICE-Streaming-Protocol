@@ -5,7 +5,7 @@
 //!
 //! # 使い方
 //!
-//! ```rust,ignore
+//! ```rust
 //! use libasp::bitrate::BitrateController;
 //!
 //! let mut ctrl = BitrateController::new(500_000); // 初期 500 kbps
@@ -27,7 +27,7 @@ pub struct BitrateConfig {
     pub additive_increase_bps: u64,
     /// 乗法的減少係数 (0.0〜1.0)。ロス時にこの割合まで減少。
     pub multiplicative_decrease: f64,
-    /// 品質レベルごとのビットレート閾値 (Low, Medium, High, Ultra) [bps]。
+    /// 品質レベルごとのビットレート閾値 (Low, Medium, High, Ultra)、単位 bps。
     pub quality_thresholds: [u64; 4],
 }
 
@@ -122,8 +122,11 @@ impl BitrateController {
         self.total_bytes_sent += bytes_acked;
 
         // 帯域幅推定: bytes / rtt → bps
-        if rtt_ms > 0 {
-            let sample_bps = bytes_acked.saturating_mul(8).saturating_mul(1000) / rtt_ms;
+        if let Some(sample_bps) = bytes_acked
+            .saturating_mul(8)
+            .saturating_mul(1000)
+            .checked_div(rtt_ms)
+        {
             // EWMA (α = 0.125)
             self.estimated_bandwidth_bps = self.estimated_bandwidth_bps / 8 * 7 + sample_bps / 8;
         }

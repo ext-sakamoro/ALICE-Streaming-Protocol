@@ -95,7 +95,7 @@ fn estimate_motion_numpy<'py>(
     // SAFETY: The NumPy arrays are kept alive by the function arguments,
     // and we're only reading from them. The GIL release allows Python
     // threads to run while we do heavy computation.
-    let results = py.allow_threads(move || {
+    let results = py.detach(move || {
         let curr = unsafe { curr_send.as_slice() };
         let prev = unsafe { prev_send.as_slice() };
         estimate_motion_fast(curr, prev, w, h, block_size, search_range, 256)
@@ -234,7 +234,7 @@ fn extract_colors<'py>(
     let send_ptr = SendPtr::new(pixels.as_ptr(), pixels.len());
 
     // Release GIL for heavy k-means computation
-    let colors = py.allow_threads(move || {
+    let colors = py.detach(move || {
         let slice = unsafe { send_ptr.as_slice() };
         extract_dominant_colors(slice, num_colors, max_iterations, sampling_rate)
     });
@@ -281,7 +281,7 @@ fn extract_colors_with_weights<'py>(
     let send_ptr = SendPtr::new(pixels.as_ptr(), pixels.len());
 
     // Release GIL for heavy k-means computation
-    let (colors, weights) = py.allow_threads(move || {
+    let (colors, weights) = py.detach(move || {
         let slice = unsafe { send_ptr.as_slice() };
         kmeans_palette(slice, num_colors, max_iterations, sampling_rate)
     });
@@ -428,7 +428,7 @@ fn detect_roi<'py>(
     let prev_send = previous.map(|p| SendPtr::new(p.as_ptr(), p.len()));
 
     // Release GIL for heavy ROI detection
-    let regions = py.allow_threads(move || {
+    let regions = py.detach(move || {
         let curr = unsafe { curr_send.as_slice() };
         let prev = prev_send.as_ref().map(|p| unsafe { p.as_slice() });
         detect_rois(curr, prev, width, height, &config)
@@ -962,54 +962,6 @@ impl PyHybridReceiver {
 #[cfg(feature = "codec")]
 use crate::media::video_codec::{VideoCodecConfig, VideoDecoder, VideoEncoder, WaveletType};
 
-/// Encode an RGB frame using ALICE-Codec (wavelet + rANS).
-///
-/// Args:
-///     frame: RGB frame (H, W, 3) as uint8 NumPy array
-///     quality: Quality 1-100 (default: 75)
-///     wavelet: Wavelet type "cdf97", "cdf53", "haar" (default: "cdf97")
-///
-/// Returns:
-///     Compressed bytes
-#[cfg(feature = "codec")]
-#[pyfunction]
-#[pyo3(signature = (frame, quality=75, wavelet="cdf97"))]
-fn encode_video_frame(
-    py: Python<'_>,
-    frame: PyReadonlyArray2<u8>,
-    quality: u8,
-    wavelet: &str,
-) -> PyResult<Py<PyBytes>> {
-    let arr = frame.as_array();
-    let shape = arr.shape();
-    // Expect (H*W, 3) or flat (H*W*3,) — we accept (N, 3)
-    if shape.len() != 2 || shape[1] != 3 {
-        return Err(pyo3::exceptions::PyValueError::new_err(
-            "Frame must be (H*W, 3) uint8 array. Reshape your (H, W, 3) frame to (-1, 3) first.",
-        ));
-    }
-    let slice = arr
-        .as_slice()
-        .ok_or_else(|| pyo3::exceptions::PyValueError::new_err("Frame must be C-contiguous"))?;
-
-    let wt = match wavelet {
-        "cdf53" => WaveletType::Cdf53,
-        "haar" => WaveletType::Haar,
-        _ => WaveletType::Cdf97,
-    };
-    let config = VideoCodecConfig {
-        wavelet_type: wt,
-        quality,
-        target_bpp: 0.0,
-    };
-    let encoder = VideoEncoder::new(config);
-
-    // Cannot infer width/height from flat (N,3) — require user to pass them
-    Err(pyo3::exceptions::PyValueError::new_err(
-        "Use encode_video_frame_wh(frame_rgb_bytes, width, height, quality, wavelet) instead",
-    ))
-}
-
 /// Encode raw RGB bytes using ALICE-Codec (wavelet + rANS).
 ///
 /// Args:
@@ -1053,10 +1005,12 @@ fn encode_video_frame_wh(
     let encoder = VideoEncoder::new(config);
 
     let send_ptr = SendPtr::new(rgb_data.as_ptr(), rgb_data.len());
-    let compressed = py.allow_threads(move || {
-        let slice = unsafe { send_ptr.as_slice() };
-        encoder.encode_frame(slice, width, height)
-    });
+    let compressed = py
+        .detach(move || {
+            let slice = unsafe { send_ptr.as_slice() };
+            encoder.try_encode_frame(slice, width, height)
+        })
+        .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))?;
 
     Ok(PyBytes::new(py, &compressed).into())
 }
@@ -1085,7 +1039,7 @@ fn decode_video_frame(
     let decoder = VideoDecoder::new(wt);
 
     let send_ptr = SendPtr::new(compressed.as_ptr(), compressed.len());
-    let result = py.allow_threads(move || {
+    let result = py.detach(move || {
         let slice = unsafe { send_ptr.as_slice() };
         decoder.decode_frame(slice)
     });
@@ -1119,7 +1073,7 @@ use crate::media::voice_codec::{
 #[pyfunction]
 #[pyo3(signature = (samples, sample_rate=16000))]
 fn encode_voice(py: Python<'_>, samples: Vec<f32>, sample_rate: u32) -> PyResult<Py<PyBytes>> {
-    let result = py.allow_threads(move || encode_voice_parametric(&samples, sample_rate));
+    let result = py.detach(move || encode_voice_parametric(&samples, sample_rate));
 
     match result {
         Ok(bytes) => Ok(PyBytes::new(py, &bytes).into()),
@@ -1144,7 +1098,7 @@ fn decode_voice<'py>(
     sample_rate: u32,
 ) -> PyResult<Bound<'py, PyArray1<f32>>> {
     let send_ptr = SendPtr::new(data.as_ptr(), data.len());
-    let result = py.allow_threads(move || {
+    let result = py.detach(move || {
         let slice = unsafe { send_ptr.as_slice() };
         decode_voice_parametric(slice, sample_rate)
     });

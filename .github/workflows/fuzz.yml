@@ -1,32 +1,31 @@
 name: Fuzz
 
-# canonical CI template: [[reference_alice_ci_canonical_template]]
-# ALICE-SDF v1.7.7 (commit 52d26f9) を base に libasp (ALICE-Streaming-Protocol) 用に調整
+# 目的:
+# - packet decode (FlatBuffers header + payload) / read_packet_fb / bincode legacy の
+#   3 target を time-boxed fuzz
+# - PR / push 毎に短時間 (60s/target)、毎日 03:00 UTC に safety net
 #
-# 目的 (libasp は network-received packet を parse する = 攻撃者制御 bytes への
-#       panic-freedom は最重要):
-# - fuzz_packet_decode: AspPacket::from_bytes(bytes) が任意 byte 列で panic せず Result
-# - fuzz_read_packet_fb: FlatBuffers read_packet(bytes) が任意 byte 列で panic せず Result
-# - fuzz_from_bytes_bincode: bincode 経路 (legacy) の panic-freedom + DoS 耐性
-#
-# 罠:
-# - cargo-fuzz は nightly toolchain 必須 (rust-toolchain 不使用時も明示指定)
+# 罠 catalog:
+# - cargo-fuzz は nightly toolchain 必須 (rust-toolchain.toml pin を上書き)
+# - fuzz/ 配下は cargo workspace の一部ではない (別 Cargo.toml)
+# - job-level continue-on-error は compile error も green に潰す (罠 #22): build は blocking、
+#   time-boxed run のみ step-level continue-on-error、committed seeds の replay は blocking
 
 on:
   push:
     branches: [main]
     paths:
       - 'src/**'
+      - 'Cargo.toml'
       - 'fuzz/**'
       - '.github/workflows/fuzz.yml'
-      - '.github/actions/**'
   pull_request:
     branches: [main]
     paths:
       - 'src/**'
+      - 'Cargo.toml'
       - 'fuzz/**'
       - '.github/workflows/fuzz.yml'
-      - '.github/actions/**'
   schedule:
     # 毎日 03:00 UTC = 12:00 JST (idle 時間帯)
     - cron: '0 3 * * *'
@@ -47,9 +46,8 @@ env:
 
 jobs:
   fuzz:
-    name: Fuzz - ${{ matrix.target }}
+    name: Fuzz — ${{ matrix.target }}
     runs-on: ubuntu-latest
-    continue-on-error: true
     strategy:
       fail-fast: false
       matrix:
@@ -60,7 +58,6 @@ jobs:
     steps:
       - uses: actions/checkout@v5
 
-      # cargo-fuzz は nightly toolchain 必須
       - name: Install nightly toolchain
         uses: dtolnay/rust-toolchain@nightly
 
@@ -68,11 +65,14 @@ jobs:
         with:
           workspaces: fuzz
 
-      - name: Create ALICE optional bridge stubs
-        uses: ./.github/actions/alice-stubs
-
       - name: Install cargo-fuzz
         run: cargo install cargo-fuzz --locked
+
+      # build は blocking: compile error を continue-on-error で隠さない (罠 #22)
+      - name: Build fuzz target
+        run: |
+          cd fuzz
+          cargo +nightly fuzz build "${{ matrix.target }}"
 
       - name: Set fuzz duration
         id: dur
@@ -83,17 +83,48 @@ jobs:
           fi
           echo "seconds=$DURATION" >> "$GITHUB_OUTPUT"
 
-      - name: Run fuzz target (time-boxed)
+      # Every crash a target ever found is committed under fuzz/seeds/<target>/;
+      # replaying those single inputs is a hard gate (a regression of a known
+      # finding fails the job). libFuzzer runs file arguments once and exits.
+      - name: Replay committed seeds (blocking)
         run: |
           cd fuzz
-          cargo +nightly fuzz run "${{ matrix.target }}" -- \
-            -max_total_time=${{ steps.dur.outputs.seconds }}
+          seeds="seeds/${{ matrix.target }}"
+          if [ -d "$seeds" ] && [ -n "$(ls -A "$seeds")" ]; then
+            for f in "$seeds"/*; do
+              echo "replay: $f"
+              cargo +nightly fuzz run "${{ matrix.target }}" "$f"
+            done
+          else
+            echo "no committed seeds for ${{ matrix.target }}"
+          fi
+
+      # The time-boxed exploration run is informational by design (not a test
+      # gate): a *new* crash uploads its input as an artifact for triage and,
+      # once committed to fuzz/seeds/, becomes part of the blocking replay above.
+      - name: Run fuzz target (time-boxed)
+        id: run
+        continue-on-error: true
+        run: |
+          cd fuzz
+          seeds="seeds/${{ matrix.target }}"
+          if [ -d "$seeds" ]; then
+            cargo +nightly fuzz run "${{ matrix.target }}" "corpus/${{ matrix.target }}" "$seeds" -- \
+              -max_total_time=${{ steps.dur.outputs.seconds }}
+          else
+            cargo +nightly fuzz run "${{ matrix.target }}" -- \
+              -max_total_time=${{ steps.dur.outputs.seconds }}
+          fi
 
       - name: Upload crash artifacts (if any)
-        if: failure()
+        if: steps.run.outcome == 'failure'
         uses: actions/upload-artifact@v4
         with:
           name: fuzz-crash-${{ matrix.target }}
           path: fuzz/artifacts/${{ matrix.target }}
           if-no-files-found: ignore
           retention-days: 14
+
+      - name: Report crash (informational)
+        if: steps.run.outcome == 'failure'
+        run: echo "::warning::fuzz target ${{ matrix.target }} found a crash — see fuzz-crash-${{ matrix.target }} artifact"

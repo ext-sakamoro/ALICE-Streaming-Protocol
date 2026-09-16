@@ -1,7 +1,10 @@
 [package]
 name = "libasp"
-version = "1.0.0"
+version = "1.1.0"
 edition = "2021"
+resolver = "3"
+# Verified by the CI `msrv` job (`cargo +1.87 check`, alice-codec / alice-zip require 1.87)
+rust-version = "1.87"
 authors = ["Moroya Sakamoto <sakamoro@alicelaw.net>"]
 description = "ALICE Streaming Protocol - High-performance video streaming codec"
 license = "MIT OR Apache-2.0"
@@ -55,27 +58,37 @@ wide = "0.7"
 bytemuck = { version = "1.14", features = ["derive"] }
 
 # Python bindings (optional) - version matched with ALICE-Zip
-pyo3 = { version = "0.23", features = ["extension-module"], optional = true }
-numpy = { version = "0.23", optional = true }
+pyo3 = { version = "0.29", features = ["extension-module"], optional = true }
+numpy = { version = "0.29", optional = true }
 
 # WebAssembly (optional)
 wasm-bindgen = { version = "0.2", optional = true }
 js-sys = { version = "0.3", optional = true }
 web-sys = { version = "0.3", optional = true, features = ["console"] }
 
-# ALICE Media Stack (optional)
-alice-codec = { path = "../ALICE-Codec", version = "0.1", optional = true, default-features = false, features = ["std"] }
+# ALICE Media Stack (optional) — crates.io versions (the CI sibling stubs were
+# versioned 0.1.0 and could not satisfy `alice-physics = "1"`, canonical trap #45)
+alice-codec = { version = "0.1", optional = true, default-features = false, features = ["std"] }
 # alice-voice 一時 disable (crates.io 未 publish、user 保留、1.1 で復活予定)
 # alice-voice = { path = "../ALICE-Voice", version = "0.1", optional = true, default-features = false, features = ["std"] }
-alice-sync = { path = "../ALICE-Sync", version = "0.6", optional = true, default-features = false, features = ["std"] }
-alice-physics = { path = "../ALICE-Physics", version = "1", optional = true, default-features = false, features = ["std"] }
-alice-crypto = { path = "../ALICE-Crypto", version = "0.1", optional = true, default-features = false, features = ["std"] }
+alice-sync = { version = "0.6", optional = true, default-features = false, features = ["std"] }
+alice-physics = { version = "1", optional = true, default-features = false, features = ["std"] }
+alice-crypto = { version = "0.1", optional = true, default-features = false, features = ["std"] }
 
 # Error handling
 thiserror = "2.0"
 
 # Logging
 log = "0.4"
+
+# `voice` is a planned feature (alice-voice not yet on crates.io, 1.1); the
+# `cfg(feature = "voice")` gates stay in the source, so tell rustc the value is
+# expected instead of getting unexpected_cfgs on every build
+[lints.rust]
+unexpected_cfgs = { level = "warn", check-cfg = ['cfg(feature, values("voice"))'] }
+
+[package.metadata.docs.rs]
+features = ["simd", "media-stack", "sync", "physics", "crypto", "bincode-compat"]
 
 [dev-dependencies]
 criterion = { version = "0.5", features = ["html_reports"] }

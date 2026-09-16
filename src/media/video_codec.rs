@@ -22,7 +22,7 @@ use alice_codec::{
     rans::FrequencyTable,
     rgb_to_ycocg_r,
     segment::{segment_by_motion, SegmentConfig, SegmentResult},
-    ycocg_r_to_rgb, Quantizer, RansDecoder, RansEncoder, Wavelet1D, Wavelet2D,
+    ycocg_r_to_rgb, CodecError, Quantizer, RansDecoder, RansEncoder, Wavelet1D, Wavelet2D,
 };
 use serde::{Deserialize, Serialize};
 
@@ -95,10 +95,33 @@ impl VideoEncoder {
     ///
     /// # Returns
     /// Compressed bitstream bytes
+    ///
+    /// # Panics
+    /// When `rgb_data.len() != width * height * 3`; use [`Self::try_encode_frame`]
+    /// to get the size mismatch as an error instead
     #[must_use]
     pub fn encode_frame(&self, rgb_data: &[u8], width: usize, height: usize) -> Vec<u8> {
+        self.try_encode_frame(rgb_data, width, height)
+            .expect("rgb_data.len() must equal width * height * 3")
+    }
+
+    /// [`Self::encode_frame`] with the input-size check as an error.
+    ///
+    /// # Errors
+    /// [`CodecError::InvalidBufferSize`] when `rgb_data.len() != width * height * 3`
+    pub fn try_encode_frame(
+        &self,
+        rgb_data: &[u8],
+        width: usize,
+        height: usize,
+    ) -> Result<Vec<u8>, CodecError> {
         let n = width * height;
-        assert_eq!(rgb_data.len(), n * 3, "RGB data size mismatch");
+        if rgb_data.len() != n * 3 {
+            return Err(CodecError::InvalidBufferSize {
+                expected: n * 3,
+                got: rgb_data.len(),
+            });
+        }
 
         // 1. RGB → YCoCg-R (reversible color transform)
         let pixels: Vec<RGB> = rgb_data
@@ -113,7 +136,10 @@ impl VideoEncoder {
         let mut y_plane = vec![0i16; n];
         let mut co_plane = vec![0i16; n];
         let mut cg_plane = vec![0i16; n];
-        rgb_to_ycocg_r(&pixels, &mut y_plane, &mut co_plane, &mut cg_plane);
+        // Planes are allocated with exactly `n` entries above, so the only error
+        // alice-codec can report (InvalidBufferSize) cannot occur
+        rgb_to_ycocg_r(&pixels, &mut y_plane, &mut co_plane, &mut cg_plane)
+            .expect("planes sized to pixel count");
 
         // 2. Quantization step (quality-based for 2D single-frame)
         //    quality 100 → step 1 (near-lossless)
@@ -134,7 +160,7 @@ impl VideoEncoder {
         );
 
         // 4. Pack into output: header + histograms + bitstreams
-        pack_compressed_frame(
+        Ok(pack_compressed_frame(
             width as u32,
             height as u32,
             step,
@@ -152,7 +178,7 @@ impl VideoEncoder {
             &y_result.bitstream,
             &co_result.bitstream,
             &cg_result.bitstream,
-        )
+        ))
     }
 
     /// Encode only the person region from a full frame using segmentation.
@@ -166,7 +192,10 @@ impl VideoEncoder {
     ///
     /// # Returns
     /// (compressed_data, SegmentResult) — compressed person region + mask info
-    #[must_use]
+    ///
+    /// # Errors
+    /// [`CodecError::InvalidBufferSize`] when a gray plane is shorter than
+    /// `width * height`
     pub fn encode_person_region(
         &self,
         current_rgb: &[u8],
@@ -174,7 +203,7 @@ impl VideoEncoder {
         reference_gray: &[u8],
         width: u32,
         height: u32,
-    ) -> (Vec<u8>, SegmentResult) {
+    ) -> Result<(Vec<u8>, SegmentResult), CodecError> {
         let seg_config = SegmentConfig {
             motion_threshold: 25,
             min_region_size: 100,
@@ -182,10 +211,12 @@ impl VideoEncoder {
             erode_radius: 1,
         };
 
-        let seg = segment_by_motion(current_gray, reference_gray, width, height, &seg_config);
+        // alice-codec 0.1.2: `InvalidBufferSize` when a gray plane is shorter
+        // than width * height (was a silent panic path before)
+        let seg = segment_by_motion(current_gray, reference_gray, width, height, &seg_config)?;
 
         if seg.foreground_count == 0 {
-            return (Vec::new(), seg);
+            return Ok((Vec::new(), seg));
         }
 
         let person_rgb = seg.extract_person_rgb(current_rgb);
@@ -193,12 +224,12 @@ impl VideoEncoder {
         let bh = seg.bbox[3] as usize;
 
         let compressed = if bw > 0 && bh > 0 {
-            self.encode_frame(&person_rgb, bw, bh)
+            self.try_encode_frame(&person_rgb, bw, bh)?
         } else {
             Vec::new()
         };
 
-        (compressed, seg)
+        Ok((compressed, seg))
     }
 }
 
@@ -206,9 +237,6 @@ impl VideoEncoder {
 #[derive(Debug)]
 pub struct VideoDecoder {
     wavelet: Wavelet2D,
-    decode_y_buffer: Vec<i16>,
-    decode_co_buffer: Vec<i16>,
-    decode_cg_buffer: Vec<i16>,
 }
 
 impl VideoDecoder {
@@ -222,9 +250,6 @@ impl VideoDecoder {
         };
         Self {
             wavelet: Wavelet2D::new(w1d),
-            decode_y_buffer: Vec::new(),
-            decode_co_buffer: Vec::new(),
-            decode_cg_buffer: Vec::new(),
         }
     }
 
@@ -237,7 +262,8 @@ impl VideoDecoder {
     /// Decode compressed bitstream to RGB frame.
     ///
     /// # Returns
-    /// (rgb_data, width, height)
+    /// (rgb_data, width, height), `None` when the bitstream header is
+    /// truncated or inconsistent
     #[must_use]
     pub fn decode_frame(&self, compressed: &[u8]) -> Option<(Vec<u8>, u32, u32)> {
         let (
@@ -266,7 +292,7 @@ impl VideoDecoder {
 
         // 1. Decode Y/Co/Cg channels in parallel (rANS → dequantize → inverse wavelet)
         let wavelet = &self.wavelet;
-        let ((mut y_i32, mut co_i32), mut cg_i32) = rayon::join(
+        let ((y_i32, co_i32), cg_i32) = rayon::join(
             || {
                 rayon::join(
                     || decode_channel(wavelet, &bs_y, &y_hist, n, y_min, y_scale, q_step_y, w, h),
@@ -284,23 +310,16 @@ impl VideoDecoder {
             },
         );
 
-        // 2. YCoCg-R → RGB (in-place i32→i16 conversion, reuse buffers)
-        self.decode_y_buffer.clear();
-        self.decode_y_buffer.extend(y_i32.iter().map(|&v| v as i16));
-        self.decode_co_buffer.clear();
-        self.decode_co_buffer
-            .extend(co_i32.iter().map(|&v| v as i16));
-        self.decode_cg_buffer.clear();
-        self.decode_cg_buffer
-            .extend(cg_i32.iter().map(|&v| v as i16));
+        // 2. YCoCg-R → RGB (i32 → i16 planes)
+        let y_plane: Vec<i16> = y_i32.iter().map(|&v| v as i16).collect();
+        let co_plane: Vec<i16> = co_i32.iter().map(|&v| v as i16).collect();
+        let cg_plane: Vec<i16> = cg_i32.iter().map(|&v| v as i16).collect();
 
         let mut rgb_out = vec![RGB { r: 0, g: 0, b: 0 }; n];
-        ycocg_r_to_rgb(
-            &self.decode_y_buffer,
-            &self.decode_co_buffer,
-            &self.decode_cg_buffer,
-            &mut rgb_out,
-        );
+        // All four buffers hold exactly `n` entries (filled above), so
+        // InvalidBufferSize cannot occur
+        ycocg_r_to_rgb(&y_plane, &co_plane, &cg_plane, &mut rgb_out)
+            .expect("planes and rgb_out sized to pixel count");
 
         // 3. RGB struct → flat bytes (pre-allocated)
         let mut rgb_bytes = Vec::with_capacity(n * 3);
@@ -344,7 +363,8 @@ fn encode_channel(
     // Quantize
     let q = Quantizer::new(step);
     let mut quantized = vec![0i32; coeffs.len()];
-    q.quantize_buffer(&coeffs, &mut quantized);
+    q.quantize_buffer(&coeffs, &mut quantized)
+        .expect("output sized to coefficient count");
 
     // Coefficients → u8 symbols
     let (symbols, min_val, scale) = coeffs_to_symbols(&quantized);
@@ -366,6 +386,7 @@ fn encode_channel(
 
 /// Decode a single color channel: rANS bitstream → dequantize → inverse wavelet → i32 plane
 #[inline(never)]
+#[allow(clippy::too_many_arguments)] // one call site per channel; mirrors the packed frame header
 fn decode_channel(
     wavelet: &Wavelet2D,
     bitstream: &[u8],
@@ -388,7 +409,10 @@ fn decode_channel(
     // Dequantize
     let q = Quantizer::new(q_step);
     let mut coeffs = vec![0i32; n];
-    q.dequantize_buffer(&quantized, &mut coeffs);
+    // `decode_n` yields exactly `n` symbols whatever the bitstream contains, so
+    // both buffers are `n` long and InvalidBufferSize cannot occur
+    q.dequantize_buffer(&quantized, &mut coeffs)
+        .expect("decode_n yields exactly n symbols");
 
     // Inverse 2D wavelet
     wavelet.inverse(&mut coeffs, width, height);
@@ -461,6 +485,7 @@ fn build_histogram(symbols: &[u8]) -> Vec<u32> {
 /// [4: y_hist_len][y_hist...][4: co_hist_len][co_hist...][4: cg_hist_len][cg_hist...]
 /// [4: bs_y_len][bs_y...][4: bs_co_len][bs_co...][4: bs_cg_len][bs_cg...]
 #[inline]
+#[allow(clippy::too_many_arguments)] // the packed frame header fields, one call site
 fn pack_compressed_frame(
     width: u32,
     height: u32,
@@ -642,6 +667,10 @@ mod tests {
         let encoder = VideoEncoder::default_config();
         let compressed = encoder.encode_frame(&rgb_data, width, height);
         assert!(!compressed.is_empty());
+        // Size mismatch is an error on the try_ path
+        assert!(encoder
+            .try_encode_frame(&rgb_data[..3], width, height)
+            .is_err());
 
         let decoder = VideoDecoder::default_config();
         let (decoded_rgb, dec_w, dec_h) = decoder.decode_frame(&compressed).unwrap();

@@ -22,16 +22,14 @@ pub fn sync_events_to_d_packet(events: &[Event], ref_sequence: u32, grid_width: 
     let mut payload = DPacketPayload::new(ref_sequence);
 
     for event in events {
-        match &event.kind {
-            EventKind::Motion { entity, delta } => {
-                let bx = (*entity % grid_width as u32) as u16;
-                let by = (*entity / grid_width as u32) as u16;
-                let dx = delta[0]; // Already i16
-                let dy = delta[1];
-                let sad = ((dx as i32).abs() + (dy as i32).abs()) as u32;
-                payload.add_motion_vector(MotionVector::new(bx, by, dx, dy, sad));
-            }
-            _ => {} // Only motion events map to D-packets
+        // Only motion events map to D-packets
+        if let EventKind::Motion { entity, delta } = &event.kind {
+            let bx = (*entity % grid_width as u32) as u16;
+            let by = (*entity / grid_width as u32) as u16;
+            let dx = delta[0]; // Already i16
+            let dy = delta[1];
+            let sad = ((dx as i32).abs() + (dy as i32).abs()) as u32;
+            payload.add_motion_vector(MotionVector::new(bx, by, dx, dy, sad));
         }
     }
 

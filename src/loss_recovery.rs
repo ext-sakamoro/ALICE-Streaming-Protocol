@@ -5,10 +5,12 @@
 //!
 //! # 使い方
 //!
-//! ```rust,ignore
+//! ```rust
 //! use libasp::loss_recovery::LossDetector;
 //!
-//! let mut det = LossDetector::new(3, 5); // reorder_tolerance=3, max_retries=5
+//! // reorder_tolerance=1: 期待番号 + 1 以上の seq が届いた時点でギャップ確定
+//! // (tolerance=3 なら seq=5 が届くまで seq=2 は「順序逆転中」として保留される)
+//! let mut det = LossDetector::new(1, 5); // reorder_tolerance=1, max_retries=5
 //! det.on_receive(0);
 //! det.on_receive(1);
 //! det.on_receive(3); // seq=2 が欠落
