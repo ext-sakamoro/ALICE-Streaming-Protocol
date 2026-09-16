@@ -73,13 +73,14 @@ impl MotionEstimator {
         width: usize,
         height: usize,
     ) -> Vec<MotionVector> {
-        estimate_motion_fast(
+        estimate_motion_with(
             current,
             previous,
             width,
             height,
             self.block_size,
             self.search_range,
+            self.algorithm,
             self.early_termination_threshold,
         )
     }
@@ -358,8 +359,13 @@ fn calculate_sad_block(
 // =============================================================================
 
 /// Ultra-fast motion estimation using SIMD and parallel processing
+/// ([`SearchAlgorithm::DiamondSearch`]).
 ///
-/// Returns only non-zero motion vectors for bandwidth efficiency
+/// Returns only non-zero motion vectors for bandwidth efficiency. A block whose
+/// SAD at `(0, 0)` is below `early_threshold` is reported as static without
+/// searching (the threshold is an absolute SAD, so it is 1 grey level per
+/// pixel for 16×16 blocks and 16 per pixel for 4×4 blocks — scale it with the
+/// block area, or pass `0` to disable the shortcut).
 #[allow(clippy::too_many_arguments)]
 #[must_use]
 pub fn estimate_motion_fast(
@@ -371,192 +377,258 @@ pub fn estimate_motion_fast(
     search_range: usize,
     early_threshold: u32,
 ) -> Vec<MotionVector> {
-    let blocks_x = width / block_size;
-    let blocks_y = height / block_size;
-
-    // Parallel processing with Rayon
-    let results: Vec<MotionVector> = (0..blocks_y)
-        .into_par_iter()
-        .flat_map(|by| {
-            let mut row_results = Vec::with_capacity(blocks_x);
-
-            for bx in 0..blocks_x {
-                let mv = diamond_search_simd(
-                    current,
-                    previous,
-                    width,
-                    height,
-                    bx,
-                    by,
-                    block_size,
-                    search_range,
-                    early_threshold,
-                );
-
-                // Only record non-zero motion vectors (bandwidth optimization)
-                if mv.dx != 0 || mv.dy != 0 {
-                    row_results.push(mv);
-                }
-            }
-            row_results
-        })
-        .collect();
-
-    results
+    estimate_motion_with(
+        current,
+        previous,
+        width,
+        height,
+        block_size,
+        search_range,
+        SearchAlgorithm::DiamondSearch,
+        early_threshold,
+    )
 }
 
-/// Diamond search with SIMD acceleration.
+/// Motion estimation with an explicit [`SearchAlgorithm`] (parallel over block
+/// rows, SIMD SAD for 8 / 16 blocks).
 ///
-/// `bx` / `by` are the block-grid indices (pixel coords = bx * `block_size`, etc.).
-/// Passing them in avoids any division inside the hot path.
+/// Returns only non-zero motion vectors. Motion vector convention: the
+/// reference block in `previous` sits at `block + (dx, dy)`, i.e. a scene that
+/// moved right by `s` pixels yields `dx = -s`.
+///
+/// | algorithm | evaluations per block | exact? |
+/// |-----------|----------------------|--------|
+/// | [`SearchAlgorithm::FullSearch`] | `(2r+1)²` | yes — global SAD minimum in the window (ties: smallest `dy`, then `dx`, `(0, 0)` first) |
+/// | [`SearchAlgorithm::ThreeStepSearch`] | `1 + 8·log₂(r)` | no (coarse-to-fine, step halves from `r/2`) |
+/// | [`SearchAlgorithm::DiamondSearch`] | data dependent | no (LDSP then SDSP refinement) |
+/// | [`SearchAlgorithm::HexagonSearch`] | data dependent | no (6-point hexagon then 4-point refinement) |
+///
+/// `early_threshold` is the absolute SAD below which a block is accepted
+/// (static shortcut at `(0, 0)` and, for the heuristic searches, at any
+/// candidate); `0` disables it.
 #[allow(clippy::too_many_arguments)]
-#[inline(always)]
-fn diamond_search_simd(
+#[must_use]
+pub fn estimate_motion_with(
     current: &[u8],
     previous: &[u8],
     width: usize,
     height: usize,
-    bx: usize,
-    by: usize,
     block_size: usize,
     search_range: usize,
+    algorithm: SearchAlgorithm,
     early_threshold: u32,
-) -> MotionVector {
-    let block_x = bx * block_size;
-    let block_y = by * block_size;
+) -> Vec<MotionVector> {
+    if block_size == 0 {
+        return Vec::new();
+    }
+    let blocks_x = width / block_size;
+    let blocks_y = height / block_size;
 
-    let mut best_x = 0i32;
-    let mut best_y = 0i32;
-    let mut best_sad = calculate_sad_block(
-        current, previous, width, block_x, block_y, block_x, block_y, block_size,
-    );
+    // Parallel processing with Rayon
+    (0..blocks_y)
+        .into_par_iter()
+        .flat_map(|by| {
+            let mut row_results = Vec::with_capacity(blocks_x);
+            for bx in 0..blocks_x {
+                let search = BlockSearch {
+                    current,
+                    previous,
+                    width,
+                    height,
+                    block_x: bx * block_size,
+                    block_y: by * block_size,
+                    block_size,
+                    range: search_range as i32,
+                    early_threshold,
+                };
+                let (dx, dy, sad) = match algorithm {
+                    SearchAlgorithm::FullSearch => search.full(),
+                    SearchAlgorithm::ThreeStepSearch => search.three_step(),
+                    SearchAlgorithm::DiamondSearch => search.diamond(),
+                    SearchAlgorithm::HexagonSearch => search.hexagon(),
+                };
+                // Only record non-zero motion vectors (bandwidth optimization)
+                if dx != 0 || dy != 0 {
+                    row_results.push(MotionVector::new(
+                        bx as u16, by as u16, dx as i16, dy as i16, sad,
+                    ));
+                }
+            }
+            row_results
+        })
+        .collect()
+}
 
-    // Early termination for static blocks
-    if best_sad < early_threshold {
-        return MotionVector::new(bx as u16, by as u16, 0, 0, best_sad);
+/// One block's search context: frame slices, block origin and the window.
+/// Every algorithm is written against [`BlockSearch::sad_at`] so the bounds /
+/// range rules and the SIMD SAD dispatch live in one place.
+struct BlockSearch<'a> {
+    current: &'a [u8],
+    previous: &'a [u8],
+    width: usize,
+    height: usize,
+    block_x: usize,
+    block_y: usize,
+    block_size: usize,
+    range: i32,
+    early_threshold: u32,
+}
+
+impl BlockSearch<'_> {
+    /// SAD of the current block against the reference block displaced by
+    /// `(dx, dy)`; `None` when the candidate leaves the search window or the
+    /// frame.
+    #[inline]
+    fn sad_at(&self, dx: i32, dy: i32) -> Option<u32> {
+        if dx.abs() > self.range || dy.abs() > self.range {
+            return None;
+        }
+        let ref_x = self.block_x as i32 + dx;
+        let ref_y = self.block_y as i32 + dy;
+        if ref_x < 0 || ref_y < 0 {
+            return None;
+        }
+        let (ref_x, ref_y) = (ref_x as usize, ref_y as usize);
+        if ref_x + self.block_size > self.width || ref_y + self.block_size > self.height {
+            return None;
+        }
+        Some(calculate_sad_block(
+            self.current,
+            self.previous,
+            self.width,
+            self.block_x,
+            self.block_y,
+            ref_x,
+            ref_y,
+            self.block_size,
+        ))
     }
 
-    let search_range_i = search_range as i32;
+    /// SAD at `(0, 0)` — every search starts here
+    #[inline]
+    fn sad_origin(&self) -> u32 {
+        self.sad_at(0, 0).unwrap_or(u32::MAX)
+    }
 
-    // Large Diamond Search Pattern (LDSP)
-    let ldsp = [
-        (0, -2),
-        (-1, -1),
-        (1, -1),
-        (-2, 0),
-        (2, 0),
-        (-1, 1),
-        (1, 1),
-        (0, 2),
-    ];
-
-    // Small Diamond Search Pattern (SDSP)
-    let sdsp = [(0, -1), (-1, 0), (1, 0), (0, 1)];
-
-    let max_iterations = search_range * 2;
-    let mut iterations = 0;
-
-    // LDSP phase
-    loop {
-        let mut improved = false;
-
-        for &(dx, dy) in &ldsp {
-            let new_x = best_x + dx;
-            let new_y = best_y + dy;
-
-            // Range check
-            if new_x.abs() > search_range_i || new_y.abs() > search_range_i {
-                continue;
-            }
-
-            // Calculate reference position (check for negative before converting to usize)
-            let ref_x_i = block_x as i32 + new_x;
-            let ref_y_i = block_y as i32 + new_y;
-
-            // Bounds check (must be non-negative and within frame)
-            if ref_x_i < 0 || ref_y_i < 0 {
-                continue;
-            }
-            let ref_x = ref_x_i as usize;
-            let ref_y = ref_y_i as usize;
-
-            if ref_x + block_size > width || ref_y + block_size > height {
-                continue;
-            }
-
-            let sad = calculate_sad_block(
-                current, previous, width, block_x, block_y, ref_x, ref_y, block_size,
-            );
-
-            if sad < best_sad {
-                best_sad = sad;
-                best_x = new_x;
-                best_y = new_y;
-                improved = true;
-
-                // Early termination
-                if best_sad < early_threshold {
-                    return MotionVector::new(
-                        bx as u16,
-                        by as u16,
-                        best_x as i16,
-                        best_y as i16,
-                        best_sad,
-                    );
+    /// Exhaustive search: global minimum over the `(2r+1)²` window.
+    /// Ties resolve to the candidate first in raster order after `(0, 0)`.
+    fn full(&self) -> (i32, i32, u32) {
+        let mut best = (0, 0, self.sad_origin());
+        if best.2 < self.early_threshold {
+            return best;
+        }
+        for dy in -self.range..=self.range {
+            for dx in -self.range..=self.range {
+                if (dx, dy) == (0, 0) {
+                    continue;
+                }
+                if let Some(sad) = self.sad_at(dx, dy) {
+                    if sad < best.2 {
+                        best = (dx, dy, sad);
+                        if sad == 0 {
+                            return best;
+                        }
+                    }
                 }
             }
         }
-
-        iterations += 1;
-        if !improved || iterations >= max_iterations {
-            break;
-        }
+        best
     }
 
-    // SDSP phase (refinement)
-    loop {
-        let mut improved = false;
-
-        for &(dx, dy) in &sdsp {
-            let new_x = best_x + dx;
-            let new_y = best_y + dy;
-
-            if new_x.abs() > search_range_i || new_y.abs() > search_range_i {
-                continue;
-            }
-
-            // Calculate reference position (check for negative before converting to usize)
-            let ref_x_i = block_x as i32 + new_x;
-            let ref_y_i = block_y as i32 + new_y;
-
-            if ref_x_i < 0 || ref_y_i < 0 {
-                continue;
-            }
-            let ref_x = ref_x_i as usize;
-            let ref_y = ref_y_i as usize;
-
-            if ref_x + block_size > width || ref_y + block_size > height {
-                continue;
-            }
-
-            let sad = calculate_sad_block(
-                current, previous, width, block_x, block_y, ref_x, ref_y, block_size,
-            );
-
-            if sad < best_sad {
-                best_sad = sad;
-                best_x = new_x;
-                best_y = new_y;
-                improved = true;
-            }
+    /// Three Step Search: 8 neighbours at `step = 2^⌊log₂(r/2)⌋`, move to the
+    /// best, halve the step until 1.
+    fn three_step(&self) -> (i32, i32, u32) {
+        let mut best = (0, 0, self.sad_origin());
+        if best.2 < self.early_threshold {
+            return best;
         }
-
-        if !improved {
-            break;
+        let mut step = 1i32;
+        while step * 2 <= (self.range / 2).max(1) {
+            step *= 2;
         }
+        while step >= 1 {
+            let (cx, cy) = (best.0, best.1);
+            for (ox, oy) in [
+                (-1, -1),
+                (0, -1),
+                (1, -1),
+                (-1, 0),
+                (1, 0),
+                (-1, 1),
+                (0, 1),
+                (1, 1),
+            ] {
+                let (dx, dy) = (cx + ox * step, cy + oy * step);
+                if let Some(sad) = self.sad_at(dx, dy) {
+                    if sad < best.2 {
+                        best = (dx, dy, sad);
+                    }
+                }
+            }
+            if best.2 < self.early_threshold {
+                return best;
+            }
+            step /= 2;
+        }
+        best
     }
 
-    MotionVector::new(bx as u16, by as u16, best_x as i16, best_y as i16, best_sad)
+    /// Pattern search: repeat `large` around the best candidate while it
+    /// improves, then refine with `small` until no improvement. Diamond and
+    /// hexagon search differ only in their patterns.
+    fn pattern_search(&self, large: &[(i32, i32)], small: &[(i32, i32)]) -> (i32, i32, u32) {
+        let mut best = (0, 0, self.sad_origin());
+        if best.2 < self.early_threshold {
+            return best;
+        }
+        let max_iterations = (self.range as usize) * 2;
+        for pattern in [large, small] {
+            let mut iterations = 0;
+            loop {
+                let mut improved = false;
+                let (cx, cy) = (best.0, best.1);
+                for &(ox, oy) in pattern {
+                    if let Some(sad) = self.sad_at(cx + ox, cy + oy) {
+                        if sad < best.2 {
+                            best = (cx + ox, cy + oy, sad);
+                            improved = true;
+                            if sad < self.early_threshold {
+                                return best;
+                            }
+                        }
+                    }
+                }
+                iterations += 1;
+                if !improved || iterations >= max_iterations {
+                    break;
+                }
+            }
+        }
+        best
+    }
+
+    /// Diamond search: Large Diamond Search Pattern, then Small Diamond
+    fn diamond(&self) -> (i32, i32, u32) {
+        const LDSP: [(i32, i32); 8] = [
+            (0, -2),
+            (-1, -1),
+            (1, -1),
+            (-2, 0),
+            (2, 0),
+            (-1, 1),
+            (1, 1),
+            (0, 2),
+        ];
+        const SDSP: [(i32, i32); 4] = [(0, -1), (-1, 0), (1, 0), (0, 1)];
+        self.pattern_search(&LDSP, &SDSP)
+    }
+
+    /// Hexagon search: 6-point large hexagon, then 4-point small square
+    fn hexagon(&self) -> (i32, i32, u32) {
+        const LARGE: [(i32, i32); 6] = [(-2, 0), (2, 0), (-1, -2), (1, -2), (-1, 2), (1, 2)];
+        const SMALL: [(i32, i32); 4] = [(0, -1), (-1, 0), (1, 0), (0, 1)];
+        self.pattern_search(&LARGE, &SMALL)
+    }
 }
 
 // =============================================================================
@@ -594,16 +666,17 @@ pub fn estimate_motion_parallel(
     height: usize,
     block_size: usize,
     search_range: usize,
-    _algorithm: SearchAlgorithm,
+    algorithm: SearchAlgorithm,
     early_threshold: u32,
 ) -> Vec<MotionVector> {
-    estimate_motion_fast(
+    estimate_motion_with(
         current,
         previous,
         width,
         height,
         block_size,
         search_range,
+        algorithm,
         early_threshold,
     )
 }

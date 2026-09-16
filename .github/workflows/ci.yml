@@ -40,6 +40,8 @@ jobs:
         run: cargo test --lib --no-default-features
       - name: Test (docs.rs feature set)
         run: cargo test --lib --no-default-features --features "$ALL_FEATURES"
+      - name: Analytic oracle tests (closed-form laws, default config)
+        run: cargo test --test analytic_oracle --no-default-features
       - name: Doc tests
         run: cargo test --doc --no-default-features --features "$ALL_FEATURES"
 

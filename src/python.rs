@@ -44,7 +44,7 @@ impl SendPtr {
 use crate::codec::{
     color::{extract_dominant_colors, kmeans_palette},
     dct::{dct2d, idct2d, sparse_dct_decode, sparse_dct_encode, DctTransform},
-    motion::{estimate_motion_fast, MotionEstimator, SearchAlgorithm},
+    motion::{estimate_motion_with, MotionEstimator, SearchAlgorithm},
     roi::{detect_rois, RoiConfig},
 };
 use crate::generated;
@@ -74,18 +74,53 @@ thread_local! {
 ///     previous: Previous frame (H, W) as uint8 `NumPy` array
 ///     `block_size`: Block size (default: 16)
 ///     `search_range`: Search range in pixels (default: 16)
+///     algorithm: "full" | "three_step" | "diamond" (default) | "hexagon"
+///     `early_threshold`: absolute SAD below which a block is accepted as-is
+///     (default 256; 0 disables the shortcut)
 ///
 /// Returns:
 ///     `NumPy` array (N, 5) of int32: [`block_x`, `block_y`, dx, dy, sad]
 #[pyfunction]
 #[allow(clippy::needless_pass_by_value)]
-#[pyo3(signature = (current, previous, block_size=16, search_range=16))]
+#[pyo3(signature = (current, previous, block_size=16, search_range=16, algorithm="diamond", early_threshold=256))]
 fn estimate_motion_numpy<'py>(
     py: Python<'py>,
     current: PyReadonlyArray2<'py, u8>,
     previous: PyReadonlyArray2<'py, u8>,
     block_size: usize,
     search_range: usize,
+    algorithm: &str,
+    early_threshold: u32,
+) -> PyResult<Bound<'py, PyArray2<i32>>> {
+    estimate_motion_numpy_with(
+        py,
+        current,
+        previous,
+        block_size,
+        search_range,
+        parse_algorithm(algorithm),
+        early_threshold,
+    )
+}
+
+fn parse_algorithm(name: &str) -> SearchAlgorithm {
+    match name {
+        "full" => SearchAlgorithm::FullSearch,
+        "three_step" => SearchAlgorithm::ThreeStepSearch,
+        "hexagon" => SearchAlgorithm::HexagonSearch,
+        _ => SearchAlgorithm::DiamondSearch,
+    }
+}
+
+#[allow(clippy::needless_pass_by_value)]
+fn estimate_motion_numpy_with<'py>(
+    py: Python<'py>,
+    current: PyReadonlyArray2<'py, u8>,
+    previous: PyReadonlyArray2<'py, u8>,
+    block_size: usize,
+    search_range: usize,
+    algorithm: SearchAlgorithm,
+    early_threshold: u32,
 ) -> PyResult<Bound<'py, PyArray2<i32>>> {
     let curr_array = current.as_array();
     let prev_array = previous.as_array();
@@ -110,7 +145,16 @@ fn estimate_motion_numpy<'py>(
         let curr = unsafe { curr_send.as_slice() };
         // SAFETY: as above
         let prev = unsafe { prev_send.as_slice() };
-        estimate_motion_fast(curr, prev, w, h, block_size, search_range, 256)
+        estimate_motion_with(
+            curr,
+            prev,
+            w,
+            h,
+            block_size,
+            search_range,
+            algorithm,
+            early_threshold,
+        )
     });
 
     // Convert to NumPy array with direct allocation (zero intermediate copy)
@@ -160,13 +204,14 @@ fn estimate_motion(
     block_size: usize,
     search_range: usize,
 ) -> PyResult<Vec<(u32, u32, i16, i16, u32)>> {
-    let mvs = estimate_motion_fast(
+    let mvs = estimate_motion_with(
         current,
         previous,
         width,
         height,
         block_size,
         search_range,
+        SearchAlgorithm::DiamondSearch,
         256,
     );
 
@@ -188,15 +233,9 @@ impl PyMotionEstimator {
     #[new]
     #[pyo3(signature = (block_size=16, search_range=16, algorithm="diamond"))]
     fn new(block_size: usize, search_range: usize, algorithm: &str) -> Self {
-        let alg = match algorithm {
-            "full" => SearchAlgorithm::FullSearch,
-            "three_step" => SearchAlgorithm::ThreeStepSearch,
-            "hexagon" => SearchAlgorithm::HexagonSearch,
-            _ => SearchAlgorithm::DiamondSearch,
-        };
-
         Self {
-            inner: MotionEstimator::new(block_size, search_range).with_algorithm(alg),
+            inner: MotionEstimator::new(block_size, search_range)
+                .with_algorithm(parse_algorithm(algorithm)),
         }
     }
 
@@ -207,12 +246,14 @@ impl PyMotionEstimator {
         current: PyReadonlyArray2<'py, u8>,
         previous: PyReadonlyArray2<'py, u8>,
     ) -> PyResult<Bound<'py, PyArray2<i32>>> {
-        estimate_motion_numpy(
+        estimate_motion_numpy_with(
             py,
             current,
             previous,
             self.inner.block_size,
             self.inner.search_range,
+            self.inner.algorithm,
+            self.inner.early_termination_threshold,
         )
     }
 

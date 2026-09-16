@@ -149,14 +149,18 @@ frame = libasp.encode_voice(audio, sample_rate=16000)
 decoded = libasp.decode_voice(frame)
 ```
 
-All media Python bindings use `py.allow_threads` for full GIL release during computation.
+All media Python bindings use `py.detach` (pyo3 0.29) for full GIL release during computation.
 
 ## Performance Highlights
 
-| Optimization | Improvement |
+<!-- perf-measured: 2026-09-16 benches/perf_claims.rs (Apple M-series, cargo bench --bench perf_claims, release + fat LTO) -->
+Measured numbers come from `cargo bench --bench perf_claims`; the two rows that
+used to read "2.8-5.3x" and "77x" were not reproducible and are stated as measured.
+
+| Optimization | Measured (2026-09-16) |
 |-------------|-------------|
-| CRC32 lookup table (compile-time) | 2.8-5.3x faster |
-| Buffer reuse (streaming) | 77x faster |
+| CRC32 lookup table (compile-time) | 154 µs per 64 KiB (425 MB/s) — same as the bit-serial reference (150 µs); the table is kept for portability, not speed |
+| Buffer reuse (streaming) | 297 ns vs 304 ns per 1080p I-packet serialisation — allocation is not the bottleneck at this size |
 | GIL release for heavy computation | Full Python parallelism |
 | Direct PyArray allocation | Zero intermediate copies |
 | Separable morphology (segmentation) | O(n) vs O(n×r²) |

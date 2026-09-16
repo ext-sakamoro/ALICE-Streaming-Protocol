@@ -15,5 +15,8 @@ pub mod roi;
 
 pub use color::{extract_dominant_colors, kmeans_palette, ColorExtractor};
 pub use dct::{dct2d, idct2d, sparse_dct_decode, sparse_dct_encode, DctTransform};
-pub use motion::{estimate_motion, estimate_motion_parallel, MotionEstimator, SearchAlgorithm};
+pub use motion::{
+    estimate_motion, estimate_motion_parallel, estimate_motion_with, MotionEstimator,
+    SearchAlgorithm,
+};
 pub use roi::{detect_rois, RoiConfig, RoiDetector};
