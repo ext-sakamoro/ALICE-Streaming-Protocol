@@ -12,6 +12,7 @@ All notable changes to ALICE-Streaming-Protocol will be documented in this file.
 
 ### Added
 - `VideoEncoder::try_encode_frame` — `Result` variant of `encode_frame` (size mismatch as `CodecError::InvalidBufferSize` instead of a panic); `VideoEncoder::encode_person_region` returns `Result`
+- `#![deny(clippy::undocumented_unsafe_blocks)]`: every hand-written `unsafe` block (29: NEON / AVX2 SAD dispatch, header raw write, NumPy zero-copy in/out, FlatBuffers vector build) carries a `SAFETY:` comment stating the invariant; the flatc-generated module is exempt at its declaration. `AspPacket::write_to_buffer_bincode` CRC append and the Python D-packet encoder no longer use `set_len` on reserved memory
 - `rust-version = "1.87"` (verified by the CI `msrv` job), `resolver = "3"`, docs.rs feature set
 - CI: 7-job `ci.yml` (3-OS tests, clippy `-D warnings` over 3 feature sets, msrv, feature powerset, rustdoc `-D warnings`, fmt, actionlint), `scripts/preflight.sh`; `security-audit.yml` semver-checks is a hard gate against crates.io; `fuzz.yml` build step blocking, seeds replay
 

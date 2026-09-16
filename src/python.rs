@@ -13,9 +13,17 @@ use pyo3::prelude::*;
 use pyo3::types::PyBytes;
 use std::cell::RefCell;
 
-/// Wrapper for raw pointer that implements Send
-/// SAFETY: Only use for read-only access to memory that outlives the operation
+/// Wrapper for a raw pointer that implements `Send`, used to hand a NumPy /
+/// `bytes` buffer to a `py.detach` closure (GIL released) for read-only work.
+///
+/// Invariants every user must uphold (see the SAFETY comments at each use):
+/// - the pointed-to buffer is a `PyReadonlyArray` / `&[u8]` argument of the
+///   enclosing `#[pyfunction]`, so it outlives the `detach` closure
+/// - the buffer is only read; the Python side holds a read borrow (NumPy
+///   borrow flag) for the duration of the call
 struct SendPtr(*const u8, usize);
+// SAFETY: a `*const u8` is `Send` as long as the referent outlives the transfer
+// and is not mutated concurrently, which the two invariants above guarantee
 unsafe impl Send for SendPtr {}
 
 impl SendPtr {
@@ -24,6 +32,9 @@ impl SendPtr {
         Self(ptr, len)
     }
 
+    /// # Safety
+    /// `self.0 .. self.0 + self.1` must be a live, initialised, unaliased-for-
+    /// writes byte range (the `#[pyfunction]` argument it was created from).
     #[inline]
     const unsafe fn as_slice(&self) -> &[u8] {
         std::slice::from_raw_parts(self.0, self.1)
@@ -92,11 +103,12 @@ fn estimate_motion_numpy<'py>(
     let curr_send = SendPtr::new(curr_slice.as_ptr(), curr_slice.len());
     let prev_send = SendPtr::new(prev_slice.as_ptr(), prev_slice.len());
 
-    // SAFETY: The NumPy arrays are kept alive by the function arguments,
-    // and we're only reading from them. The GIL release allows Python
-    // threads to run while we do heavy computation.
     let results = py.detach(move || {
+        // SAFETY: `curr_slice` / `prev_slice` are borrowed from the
+        // `PyReadonlyArray` arguments of this function, which outlive the
+        // closure and are read-only for its duration (NumPy borrow flag)
         let curr = unsafe { curr_send.as_slice() };
+        // SAFETY: as above
         let prev = unsafe { prev_send.as_slice() };
         estimate_motion_fast(curr, prev, w, h, block_size, search_range, 256)
     });
@@ -114,9 +126,13 @@ fn estimate_motion_numpy<'py>(
     }
 
     // Allocate NumPy array directly in Python heap (zero-copy output)
+    // SAFETY: `PyArray::new` returns uninitialised memory; every element is
+    // written below before the array is returned to Python
     let array = unsafe { PyArray2::<i32>::new(py, [n_results, 5], false) };
 
     // Write directly to Python memory
+    // SAFETY: `array` is a freshly allocated, exclusively owned [n_results, 5]
+    // C-contiguous i32 buffer; indices stay below n_results * 5
     unsafe {
         let ptr = array.data().cast::<i32>();
         for (i, r) in results.iter().enumerate() {
@@ -235,6 +251,8 @@ fn extract_colors<'py>(
 
     // Release GIL for heavy k-means computation
     let colors = py.detach(move || {
+        // SAFETY: `pixels` is a `&[u8]` argument of this function (a Python
+        // `bytes` object kept alive by the caller); read-only, outlives the closure
         let slice = unsafe { send_ptr.as_slice() };
         extract_dominant_colors(slice, num_colors, max_iterations, sampling_rate)
     });
@@ -250,9 +268,13 @@ fn extract_colors<'py>(
             });
     }
 
+    // SAFETY: `PyArray::new` returns uninitialised memory; every element is
+    // written below before the array is returned to Python
     let array = unsafe { PyArray2::<u8>::new(py, [n, 3], false) };
 
     // Write directly to Python memory
+    // SAFETY: freshly allocated, exclusively owned [n, 3] u8 buffer; indices
+    // stay below n * 3 (one row per colour)
     unsafe {
         let ptr = array.data().cast::<u8>();
         for (i, c) in colors.iter().enumerate() {
@@ -282,6 +304,8 @@ fn extract_colors_with_weights<'py>(
 
     // Release GIL for heavy k-means computation
     let (colors, weights) = py.detach(move || {
+        // SAFETY: `pixels` is a `&[u8]` argument of this function; read-only,
+        // outlives the closure
         let slice = unsafe { send_ptr.as_slice() };
         kmeans_palette(slice, num_colors, max_iterations, sampling_rate)
     });
@@ -289,9 +313,13 @@ fn extract_colors_with_weights<'py>(
     let n = colors.len();
 
     // Allocate colors array directly in Python heap
+    // SAFETY: `PyArray::new` returns uninitialised memory; every element is
+    // written below before the array is returned to Python
     let colors_array = unsafe { PyArray2::<u8>::new(py, [n, 3], false) };
 
     // Write colors directly to Python memory
+    // SAFETY: freshly allocated, exclusively owned [n, 3] u8 buffer; indices
+    // stay below n * 3
     unsafe {
         let ptr = colors_array.data().cast::<u8>();
         for (i, c) in colors.iter().enumerate() {
@@ -429,7 +457,10 @@ fn detect_roi<'py>(
 
     // Release GIL for heavy ROI detection
     let regions = py.detach(move || {
+        // SAFETY: `current` / `previous` are `&[u8]` arguments of this
+        // function; read-only, outlive the closure
         let curr = unsafe { curr_send.as_slice() };
+        // SAFETY: as above
         let prev = prev_send.as_ref().map(|p| unsafe { p.as_slice() });
         detect_rois(curr, prev, width, height, &config)
     });
@@ -447,9 +478,13 @@ fn detect_roi<'py>(
     }
 
     // Allocate NumPy array directly in Python heap (zero-copy output)
+    // SAFETY: `PyArray::new` returns uninitialised memory; every element is
+    // written below before the array is returned to Python
     let array = unsafe { PyArray2::<f32>::new(py, [n, 6], false) };
 
     // Write directly to Python memory
+    // SAFETY: freshly allocated, exclusively owned [n, 6] f32 buffer; indices
+    // stay below n * 6
     unsafe {
         let ptr = array.data().cast::<f32>();
         for (i, r) in regions.iter().enumerate() {
@@ -544,6 +579,9 @@ fn create_d_packet_numpy(
             .builder
             .start_vector::<generated::MotionVector>(n_rows);
 
+        // SAFETY: `ptr` comes from `mv_array.as_slice()` (C-contiguous, checked
+        // above), which holds `n_rows * n_cols` i32 with `n_cols >= 5`, so every
+        // `base + k` (k < 5) is in bounds; the read borrow keeps it alive
         unsafe {
             for i in (0..n_rows).rev() {
                 let base = i * n_cols;
@@ -595,14 +633,16 @@ fn create_d_packet_numpy(
 
         let total_size = AspPacketHeader::SIZE + payload_len + 4;
 
+        // Zero-fill instead of `set_len` on reserved memory: the bytes are all
+        // overwritten below, but `set_len` would expose uninitialised u8 first
         encoder.buffer.clear();
-        let current_cap = encoder.buffer.capacity();
-        if current_cap < total_size {
-            encoder.buffer.reserve(total_size - current_cap);
-        }
+        encoder.buffer.resize(total_size, 0);
 
+        // SAFETY: `buffer` holds exactly `total_size` initialised bytes;
+        // header (SIZE bytes at 0), payload (`payload_len` bytes at SIZE, copied
+        // from the FlatBuffers finished data which is not modified until the
+        // next `reset`) and CRC (4 bytes at total_size - 4) tile it exactly
         unsafe {
-            encoder.buffer.set_len(total_size);
             let out_ptr = encoder.buffer.as_mut_ptr();
 
             // Write Header (zero bounds check)
@@ -1007,6 +1047,8 @@ fn encode_video_frame_wh(
     let send_ptr = SendPtr::new(rgb_data.as_ptr(), rgb_data.len());
     let compressed = py
         .detach(move || {
+            // SAFETY: `rgb_data` is a `&[u8]` argument of this function;
+            // read-only, outlives the closure
             let slice = unsafe { send_ptr.as_slice() };
             encoder.try_encode_frame(slice, width, height)
         })
@@ -1040,6 +1082,8 @@ fn decode_video_frame(
 
     let send_ptr = SendPtr::new(compressed.as_ptr(), compressed.len());
     let result = py.detach(move || {
+        // SAFETY: `compressed` is a `&[u8]` argument of this function;
+        // read-only, outlives the closure
         let slice = unsafe { send_ptr.as_slice() };
         decoder.decode_frame(slice)
     });
@@ -1099,6 +1143,8 @@ fn decode_voice<'py>(
 ) -> PyResult<Bound<'py, PyArray1<f32>>> {
     let send_ptr = SendPtr::new(data.as_ptr(), data.len());
     let result = py.detach(move || {
+        // SAFETY: `data` is a `&[u8]` argument of this function; read-only,
+        // outlives the closure
         let slice = unsafe { send_ptr.as_slice() };
         decode_voice_parametric(slice, sample_rate)
     });

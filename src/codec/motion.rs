@@ -144,6 +144,10 @@ mod x86_simd {
     use std::arch::x86_64::*;
 
     /// AVX2 SAD for 16x16 block
+    ///
+    /// # Safety
+    /// `src` and `ref_p` must each point to at least `15 * stride + 16` readable
+    /// bytes (16 rows of 16 bytes at the given stride)
     #[inline(always)]
     pub unsafe fn sad_16x16_avx2(
         src: *const u8,
@@ -189,6 +193,10 @@ mod arm_simd {
     };
 
     /// NEON SAD for 16x16 block
+    ///
+    /// # Safety
+    /// `src` and `ref_p` must each point to at least `15 * stride + 16` readable
+    /// bytes (16 rows of 16 bytes at the given stride)
     #[inline(always)]
     pub unsafe fn sad_16x16_neon(
         src: *const u8,
@@ -234,6 +242,10 @@ mod arm_simd {
     }
 
     /// NEON SAD for 8x8 block
+    ///
+    /// # Safety
+    /// `src` and `ref_p` must each point to at least `7 * stride + 8` readable
+    /// bytes (8 rows of 8 bytes at the given stride)
     #[inline(always)]
     pub unsafe fn sad_8x8_neon(
         src: *const u8,
@@ -297,11 +309,16 @@ fn calculate_sad_block(
     // Dispatch to SIMD or scalar based on block size and platform
     match block_size {
         16 => {
+            // SAFETY: the bounds check above guarantees `src` / `ref_block` hold
+            // at least `15 * width + 16` bytes, i.e. every row read (16 bytes at
+            // stride `width`, rows 0..16) is in bounds; NEON is baseline on aarch64
             #[cfg(target_arch = "aarch64")]
             unsafe {
                 return arm_simd::sad_16x16_neon(src.as_ptr(), width, ref_block.as_ptr(), width);
             }
 
+            // SAFETY: same bounds argument; AVX2 availability is a compile-time
+            // `target_feature`, so no runtime detection is needed
             #[cfg(all(target_arch = "x86_64", target_feature = "avx2"))]
             unsafe {
                 return x86_simd::sad_16x16_avx2(src.as_ptr(), width, ref_block.as_ptr(), width);
@@ -311,6 +328,8 @@ fn calculate_sad_block(
             sad_16x16_scalar(src, width, ref_block, width)
         }
         8 => {
+            // SAFETY: bounds check above guarantees `7 * width + 8` bytes, which
+            // covers the 8 rows of 8 bytes read at stride `width`
             #[cfg(target_arch = "aarch64")]
             unsafe {
                 return arm_simd::sad_8x8_neon(src.as_ptr(), width, ref_block.as_ptr(), width);

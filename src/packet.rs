@@ -1101,15 +1101,7 @@ impl AspPacket {
         buffer[..AspPacketHeader::SIZE].copy_from_slice(&header.to_bytes());
 
         let checksum = crc32(buffer);
-        let crc_bytes = checksum.to_be_bytes();
-        let len = buffer.len();
-
-        buffer.reserve(4);
-        unsafe {
-            let ptr = buffer.as_mut_ptr().add(len);
-            std::ptr::copy_nonoverlapping(crc_bytes.as_ptr(), ptr, 4);
-            buffer.set_len(len + 4);
-        }
+        buffer.extend_from_slice(&checksum.to_be_bytes());
 
         Ok(())
     }

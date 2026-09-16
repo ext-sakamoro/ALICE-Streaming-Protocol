@@ -98,6 +98,9 @@
 //!
 //! Moroya Sakamoto
 
+// Every hand-written `unsafe` block carries a `// SAFETY:` comment (karikari §3-2);
+// the flatc-generated module is exempted at its declaration
+#![deny(clippy::undocumented_unsafe_blocks)]
 #![allow(
     clippy::cast_possible_truncation,
     clippy::cast_possible_wrap,
@@ -126,7 +129,10 @@ pub mod types;
 ///
 /// This module contains auto-generated code from `schemas/asp.fbs`.
 /// Use `flatbuffers_api` for a higher-level interface.
-#[allow(missing_docs)]
+// flatc output: `unsafe` blocks are generated (verified by the FlatBuffers
+// verifier at read time), a hand-written SAFETY comment would be lost on the
+// next regeneration — the lint below is enforced on the hand-written modules
+#[allow(missing_docs, clippy::undocumented_unsafe_blocks)]
 pub mod generated;
 
 /// FlatBuffers API for zero-copy serialization

@@ -350,6 +350,7 @@ mod tests {
 
         // Test write_to_ptr()
         let mut buffer = [0u8; AspPacketHeader::SIZE];
+        // SAFETY: `buffer` is exactly `SIZE` bytes, the documented requirement
         unsafe {
             header.write_to_ptr(buffer.as_mut_ptr());
         }
@@ -372,6 +373,7 @@ mod tests {
 
             let expected = header.to_bytes();
             let mut buffer = [0u8; AspPacketHeader::SIZE];
+            // SAFETY: `buffer` is exactly `SIZE` bytes, the documented requirement
             unsafe {
                 header.write_to_ptr(buffer.as_mut_ptr());
             }
