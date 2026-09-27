@@ -9,7 +9,9 @@ authors = ["Moroya Sakamoto <sakamoro@alicelaw.net>"]
 description = "ALICE Streaming Protocol - High-performance video streaming codec"
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/ext-sakamoro/ALICE-Streaming-Protocol"
-keywords = ["streaming", "video", "codec", "alice", "procedural"]
+# crates.io の検索到達性は一般名詞で決まる ("alice" を入れると ALICE を既に
+# 知っている人にしか当たらない) 反映は次 publish 時
+keywords = ["streaming", "video", "codec", "compression", "procedural"]
 categories = ["multimedia::video", "compression"]
 
 # (default lib target: an explicit `crate-type = ["rlib"]` makes the target kind
