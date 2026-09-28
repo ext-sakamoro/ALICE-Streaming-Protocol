@@ -70,7 +70,7 @@ jobs:
     steps:
       - uses: actions/checkout@v5
       - name: Install MSRV toolchain
-        uses: dtolnay/rust-toolchain@1.87
+        uses: dtolnay/rust-toolchain@1.120
       - uses: Swatinem/rust-cache@v2
       # `rust-version` is only true if this compiles; bump both together (trap #27 / #35)
       - name: cargo check on MSRV (no default features)
