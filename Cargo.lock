@@ -42,10 +42,19 @@ dependencies = [
 ]
 
 [[package]]
-name = "alice-physics"
-version = "1.2.0"
+name = "alice-det-math"
+version = "0.3.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "872fb7d9e1a0150eb6a65a37de895e94c97b80dae1ec204ae8a97f70e583dc9b"
+checksum = "b30996b43377046e6b1332f49e795792babc9a224bcef3caabd23e639028bea1"
+
+[[package]]
+name = "alice-physics"
+version = "2.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f8067e5837857331e1f72db3f070ad1a34fb4823420956398b1740d979235fa8"
+dependencies = [
+ "alice-det-math",
+]
 
 [[package]]
 name = "alice-sync"

@@ -75,7 +75,7 @@ alice-codec = { version = "0.1", optional = true, default-features = false, feat
 # alice-voice 一時 disable (crates.io 未 publish、user 保留、1.1 で復活予定)
 # alice-voice = { path = "../ALICE-Voice", version = "0.1", optional = true, default-features = false, features = ["std"] }
 alice-sync = { version = "0.6", optional = true, default-features = false, features = ["std"] }
-alice-physics = { version = "1", optional = true, default-features = false, features = ["std"] }
+alice-physics = { version = "2", optional = true, default-features = false, features = ["std"] }
 alice-crypto = { version = "0.1", optional = true, default-features = false, features = ["std"] }
 
 # Error handling

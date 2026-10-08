@@ -4,6 +4,9 @@ All notable changes to ALICE-Streaming-Protocol will be documented in this file.
 
 ## [Unreleased]
 
+### Changed
+- **`alice-physics` の要求を `1` から `2` に上げた (2026-10-09)** 2.0.0 は `#[non_exhaustive]` の一括付与と enum の variant 追加を含む major bump で、caret は major を跨がないため `^1` のままでは公開済の 2.0.0 に永久に到達しない `physics_bridge` と `tests/analytic_oracle.rs` に struct literal 構築は無く、呼び出し側の変更は不要だった 実測: `cargo check --features physics --all-targets` が 0 error (lock の解決は 2.0.0)、`scripts/preflight.sh` (full) が exit 0
+
 ### Fixed
 - Release profile no longer sets `panic = "abort"`: PyO3 turns a Rust panic into a Python `PanicException` only when the panic can unwind, so with `abort` any panic inside a `libasp` call (a mismatched NumPy shape, an index past the frame) terminated the interpreter instead of raising
 
