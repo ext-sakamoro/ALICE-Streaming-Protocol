@@ -23,9 +23,9 @@ dependencies = [
 
 [[package]]
 name = "alice-codec"
-version = "0.1.2"
+version = "0.1.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e9b9429c09ce1892ba730b8f6e57b987c77ab0f14ea2ec5f0f01f5785bc58725"
+checksum = "e9893c7a708174b015fa7d65e795481a370722461336a1978c4f274c02151c28"
 dependencies = [
  "libm",
 ]
