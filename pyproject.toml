@@ -7,7 +7,7 @@ name = "libasp"
 version = "1.0.0"
 description = "ALICE Streaming Protocol - High-performance video streaming codec"
 readme = "README.md"
-license = { text = "MIT" }
+license = "LicenseRef-Proprietary"
 authors = [
     { name = "Moroya Sakamoto", email = "sakamoto@alice-project.dev" }
 ]

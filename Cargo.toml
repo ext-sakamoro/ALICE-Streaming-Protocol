@@ -1,5 +1,6 @@
 [package]
 name = "libasp"
+publish = false
 version = "1.1.0"
 edition = "2021"
 resolver = "3"
@@ -7,7 +8,7 @@ resolver = "3"
 rust-version = "1.87"
 authors = ["Moroya Sakamoto <sakamoro@alicelaw.net>"]
 description = "ALICE Streaming Protocol - High-performance video streaming codec"
-license = "MIT OR Apache-2.0"
+license = "LicenseRef-Proprietary"
 repository = "https://github.com/ext-sakamoro/ALICE-Streaming-Protocol"
 # crates.io の検索到達性は一般名詞で決まる ("alice" を入れると ALICE を既に
 # 知っている人にしか当たらない) 反映は次 publish 時

@@ -478,16 +478,9 @@ pub struct MotionVectorCompact {
 
 ## License
 
-**Dual License Model** - See [LICENSE](LICENSE) for full details.
+`LicenseRef-Proprietary`. The text is [LICENSE-Proprietary](LICENSE-Proprietary).
 
-| Component | License | Purpose |
-|-----------|---------|---------|
-| Protocol Specification | MIT | Global standard adoption |
-| Receiver (Decoder) | MIT | Run on every device |
-| Sender (Encoder Core) | MIT | Democratize ultra-low bandwidth |
-| Sender (Enterprise) | Commercial | High-scale infrastructure |
-
-**Attribution**: Free encoder users must include "Streamed via ALICE Protocol (ASP)" in stream metadata.
+Enquiries: https://extoria.co.jp/
 
 ## Cross-Crate Bridges
 

@@ -4,7 +4,7 @@
 // Code generators: flatc --rust --cpp --go --java --python --ts -o src/generated/ schemas/asp.fbs
 //
 // Copyright (c) 2026 Moroya Sakamoto
-// License: MIT (Protocol Specification)
+// SPDX-License-Identifier: LicenseRef-Proprietary
 
 namespace Alice.Asp;
 

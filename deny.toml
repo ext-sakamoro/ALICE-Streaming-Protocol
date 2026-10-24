@@ -63,6 +63,9 @@ allow = [
     "NCSA",
 ]
 
+[licenses.private]
+ignore = true
+
 [[licenses.clarify]]
 name = "ring"
 version = "*"

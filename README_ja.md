@@ -256,16 +256,9 @@ simd = []                    # 明示的SIMD（自動検出）
 
 ## ライセンス
 
-**デュアルライセンスモデル** - 詳細は[LICENSE](LICENSE)を参照。
+`LicenseRef-Proprietary` 条文は [LICENSE-Proprietary](LICENSE-Proprietary)
 
-| コンポーネント | ライセンス | 目的 |
-|--------------|-----------|------|
-| プロトコル仕様 | MIT | グローバル標準採用 |
-| レシーバー（デコーダー） | MIT | あらゆるデバイスで動作 |
-| センダー（エンコーダコア） | MIT | 超低帯域幅技術の民主化 |
-| センダー（エンタープライズ） | 商用 | 大規模インフラ向け |
-
-**帰属表示**: 無料エンコーダ使用者はストリームメタデータに「Streamed via ALICE Protocol (ASP)」を含める必要があります。
+Enquiries: https://extoria.co.jp/
 
 ## 関連プロジェクト
 
