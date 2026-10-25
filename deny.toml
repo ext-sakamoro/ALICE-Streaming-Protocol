@@ -4,7 +4,7 @@
 # ALICE-SDF v1.7.7 (commit 52d26f9) の deny.toml を base に libasp
 # (ALICE-Streaming-Protocol) 用に調整
 #
-# libasp 自身は "MIT OR Apache-2.0" のため self-exception は不要
+# libasp 自身は publish = false の crate なので licence の検査の対象外 (self-exception は不要)
 # sibling stubs (alice-codec / alice-voice / alice-sync / alice-physics /
 # alice-crypto) は alice-stubs action で "MIT OR Apache-2.0" 生成される
 
@@ -76,8 +76,8 @@ version = "*"
 expression = "ISC"
 license-files = [{ path = "LICENSE", hash = 0x001c7e6c }]
 
-# libasp 自身は "MIT OR Apache-2.0" のため self-exception 不要
-# sibling stubs も同 license のため exception 追加不要
+# libasp 自身は publish = false なので self-exception 不要
+# sibling stubs は "MIT OR Apache-2.0" で生成されるので exception 追加不要
 
 # ---------------------------------------------------------------------------
 # Bans (banned crate / duplicate / wildcard)
