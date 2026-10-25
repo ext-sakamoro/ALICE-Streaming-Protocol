@@ -9,7 +9,7 @@ All notable changes to ALICE-Streaming-Protocol will be documented in this file.
 
 ### Changed
 - Licence: `MIT OR Apache-2.0` → `LicenseRef-Proprietary`
-- `deny.toml` の comment の libasp の licence の記述を外した (libasp は publish = false で licence の検査の対象外)
+- `deny.toml` と `.github/workflows/security-audit.yml` の comment の libasp の licence の記述を外した (libasp は publish = false で licence の検査の対象外)
 - CI: ci.yml / fuzz.yml / security-audit.yml を `ci/**` の branch でも走らせ、ci.yml に手動実行を足し、main の run は打ち切らない concurrency にした (main に入れる前に branch で全 workflow を通すため)
 - **`alice-physics` の要求を `1` から `2` に上げた (2026-10-09)** 2.0.0 は `#[non_exhaustive]` の一括付与と enum の variant 追加を含む major bump で、caret は major を跨がないため `^1` のままでは公開済の 2.0.0 に永久に到達しない `physics_bridge` と `tests/analytic_oracle.rs` に struct literal 構築は無く、呼び出し側の変更は不要だった 実測: `cargo check --features physics --all-targets` が 0 error (lock の解決は 2.0.0)、`scripts/preflight.sh` (full) が exit 0
 
