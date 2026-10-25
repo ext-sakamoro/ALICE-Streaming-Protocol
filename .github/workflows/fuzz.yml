@@ -8,7 +8,7 @@ name: Fuzz
 # 罠 catalog:
 # - cargo-fuzz は nightly toolchain 必須 (rust-toolchain.toml pin を上書き)
 # - fuzz/ 配下は cargo workspace の一部ではない (別 Cargo.toml)
-# - job-level continue-on-error は compile error も green に潰す (罠 #22): build は blocking、
+# - job-level continue-on-error は compile error も green に潰す: build は blocking、
 #   time-boxed run のみ step-level continue-on-error、committed seeds の replay は blocking
 
 on:
@@ -96,7 +96,7 @@ jobs:
       - name: Install cargo-fuzz
         run: cargo install cargo-fuzz --locked
 
-      # build は blocking: compile error を continue-on-error で隠さない (罠 #22)
+      # build は blocking: compile error を continue-on-error で隠さない
       - name: Build fuzz target
         run: |
           cd fuzz

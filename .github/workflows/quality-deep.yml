@@ -1,13 +1,13 @@
-# quality-deep — 週次 / 手動 / PR 差分の深い品質検査 (karikari-review §13、2026-09-15 制定)
+# quality-deep — 週次 / 手動 / PR 差分の深い品質検査
 #
 # mutants : cargo-mutants (test が bug を検出できるかの逆検査) PR では --in-diff で差分のみ、
 #           週次 / 手動は crate 全体を 16 shard 並列 (2,300 mutant、GH runner 1 mutant ≈ 20 s → 16 shard で ≈ 50 min)
-#           test set は `--lib --test analytic_oracle` (解析解 oracle を外すと法則が未測定に見える、罠 #44)
+# test set は `--lib --test analytic_oracle` (解析解 oracle を外すと法則が未測定に見える、)
 #
 # 除外 (.cargo/mutants.toml): flatc 生成の src/generated/** と PyO3 binding src/python.rs
 # 2026-09-16: 初回 dispatch は 8 shard 全部 "memory allocation failed" (cargo-mutants の source walk が
-# 17 要素 tuple 戻り値の置換候補直積で爆発) → unpack_compressed_frame を struct 化して解消 (罠 #46)
-# 罠 #22 (continue-on-error は compile error も green に潰す) に従い continue-on-error は使わない
+# 17 要素 tuple 戻り値の置換候補直積で爆発) → unpack_compressed_frame を struct 化して解消
+# (continue-on-error は compile error も green に潰す) に従い continue-on-error は使わない
 # informational な結果は Job Summary に書く (exit code 0 / 2 / 3 = 走った、それ以外 = 壊れている)
 name: Quality Deep
 

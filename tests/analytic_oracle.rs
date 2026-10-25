@@ -1,4 +1,4 @@
-//! Analytic-oracle tests (CLAUDE.md § 解析解突合テスト規律)
+//! Analytic-oracle tests
 //!
 //! Every numerical law in the codec is checked against a closed-form answer or
 //! an independent scalar reference, through the default configuration, with

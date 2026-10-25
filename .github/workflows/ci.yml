@@ -5,8 +5,8 @@ name: CI
 #
 # 2026-09-16: the "dependency stubs" step (empty 0.1.0 sibling crates) is gone —
 # every ALICE sibling is on crates.io, so feature builds compile against the
-# real crates (canonical template trap #45); `continue-on-error` on feature
-# builds is gone as well (trap #22).
+# real crates; `continue-on-error` on feature
+# builds is gone as well.
 
 on:
   push:
@@ -74,7 +74,7 @@ jobs:
       - name: Install MSRV toolchain
         uses: dtolnay/rust-toolchain@1.87
       - uses: Swatinem/rust-cache@v2
-      # `rust-version` is only true if this compiles; bump both together (trap #27 / #35)
+      # `rust-version` is only true if this compiles; bump both together
       - name: cargo check on MSRV (no default features)
         run: cargo +1.87 check --lib --locked --no-default-features
       - name: cargo check on MSRV (docs.rs feature set)

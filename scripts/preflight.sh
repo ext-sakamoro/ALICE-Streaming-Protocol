@@ -2,7 +2,6 @@
 # Local reproduction of the CI gates before `git push` (ci.yml + the blocking
 # jobs of security-audit.yml). Every command is the one CI runs; a step this
 # script does not cover is a step that can only fail remotely
-# (feedback_ci_local_verify_preflight_2026_09_15).
 #
 # usage: scripts/preflight.sh [--quick]   (--quick skips the test suites, fuzz build and semver)
 set -euo pipefail

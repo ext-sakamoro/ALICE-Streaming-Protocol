@@ -98,7 +98,7 @@
 //!
 //! Moroya Sakamoto
 
-// Every hand-written `unsafe` block carries a `// SAFETY:` comment (karikari §3-2);
+// Every hand-written `unsafe` block carries a `// SAFETY:` comment;
 // the flatc-generated module is exempted at its declaration
 #![deny(clippy::undocumented_unsafe_blocks)]
 #![allow(

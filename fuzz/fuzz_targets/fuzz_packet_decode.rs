@@ -5,7 +5,6 @@
 //! packet 相当、あるいは任意の garbage) を食わせても panic せず AspResult で
 //! 返ることを保証する これは network-facing surface の DoS 耐性の要
 //!
-//! canonical CI template [[reference_alice_ci_canonical_template]] 準拠
 
 #![no_main]
 

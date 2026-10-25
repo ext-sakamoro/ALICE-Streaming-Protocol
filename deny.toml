@@ -1,14 +1,12 @@
 # cargo-deny 設定 (v0.14+ schema)
 # https://embarkstudios.github.io/cargo-deny/
 #
-# canonical CI template: [[reference_alice_ci_canonical_template]]
 # ALICE-SDF v1.7.7 (commit 52d26f9) の deny.toml を base に libasp
 # (ALICE-Streaming-Protocol) 用に調整
 #
 # libasp 自身は "MIT OR Apache-2.0" のため self-exception は不要
 # sibling stubs (alice-codec / alice-voice / alice-sync / alice-physics /
 # alice-crypto) は alice-stubs action で "MIT OR Apache-2.0" 生成される
-# (canonical 罠 #2 予防)
 
 [graph]
 all-features = false
@@ -26,7 +24,7 @@ db-urls = ["https://github.com/rustsec/advisory-db"]
 version = 2
 yanked = "deny"
 ignore = [
-    # bincode 1.x unmaintained (canonical trap #6)
+    # bincode 1.x unmaintained
     # libasp は bincode-compat feature 経由で legacy serialization を保持
     # bincode 2.x への移行は breaking change のため v2.0 で対応予定
     # DoS 対策として `.with_limit::<N>()` 相当の入力サイズ上限を採用
@@ -55,7 +53,7 @@ allow = [
     "BSL-1.0",
     "MPL-2.0",
     "OpenSSL",
-    # canonical trap #14: font-related licenses (egui / epaint_default_fonts 経由)
+    # : font-related licenses (egui / epaint_default_fonts 経由)
     # libasp では現状 unused だが将来 view feature 追加時に備え pre-listed
     "OFL-1.1",
     "Ubuntu-font-1.0",

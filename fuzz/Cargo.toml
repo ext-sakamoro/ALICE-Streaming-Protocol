@@ -24,7 +24,7 @@ features = ["bincode-compat"]
 default = ["bincode-compat"]
 bincode-compat = []
 
-# cargo-machete false-positive 予防 (canonical [[reference_alice_ci_canonical_template]] 罠 #3)
+# cargo-machete false-positive 予防
 # - libfuzzer-sys: fuzz_target! macro 経由で使用 (macro 展開時 use)
 # - arbitrary: 将来 fuzz target で #[derive(Arbitrary)] 使用時に必要
 #   (現行 3 target は raw &[u8] のみだが、canonical scaffold として pre-listed)

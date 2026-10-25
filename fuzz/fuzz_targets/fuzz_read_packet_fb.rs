@@ -7,7 +7,6 @@
 //! 加えて get_packet_type は packet 種別 dispatch の前段 discriminator として
 //! 使われるため、任意 byte で panic しないことは特に重要
 //!
-//! canonical CI template [[reference_alice_ci_canonical_template]] 準拠
 
 #![no_main]
 

@@ -1,6 +1,5 @@
 name: Security & Hygiene
 
-# canonical CI template: [[reference_alice_ci_canonical_template]]
 # ALICE-SDF v1.7.7 (commit 52d26f9) を base に libasp (ALICE-Streaming-Protocol) 用に調整
 #
 # 目的:
@@ -82,8 +81,8 @@ jobs:
         run: cargo install cargo-audit --locked
 
       # advisory-db は audit 実行時に自動取得 yanked crate は deny
-      # canonical trap #15: unmaintained ignores は deny.toml と同期させる
-      # - RUSTSEC-2025-0141: bincode 1.x unmaintained (canonical trap #6)
+      # : unmaintained ignores は deny.toml と同期させる
+      # - RUSTSEC-2025-0141: bincode 1.x unmaintained
       
       
       - name: Run cargo audit
@@ -104,7 +103,7 @@ jobs:
 
       # EmbarkStudios/cargo-deny-action@v2 は Docker container 内で稼働し、
       # /github/workspace のみ mount するため sibling path dep が見えず fail する
-      # 直接 install で回避 (canonical trap #1)
+      # 直接 install で回避
       - name: Install cargo-deny
         run: cargo install --locked cargo-deny
 
@@ -132,8 +131,8 @@ jobs:
     steps:
       - uses: actions/checkout@v5
 
-      # canonical CI template 罠 #9-c (2026-09-03 refine):
-      # CLAUDE.md 仮実装 rule では todo!() / unimplemented!() は legitimate な
+      # 注 (2026-09-03 refine):
+      # todo!() / unimplemented!() は legitimate な
       # fail-fast idiom として endorse されている → block しない、warn only
       # → block 対象は panic!(STUB) (explicit STUB marker) と dbg!() のみ
       # → comment 行 (^\s*//) は除外して source code のみ検知
@@ -164,7 +163,7 @@ jobs:
             || true)
           if [ -n "$hits" ]; then
             count=$(echo "$hits" | wc -l | tr -d ' ')
-            echo "::warning::${count} todo!()/unimplemented!() marker(s) in src/ (informational, CLAUDE.md legitimate fail-fast idiom):"
+            echo "::warning::${count} todo!()/unimplemented!() marker(s) in src/ (informational, legitimate fail-fast idiom):"
             echo "$hits" | head -20
           else
             echo "OK: No todo!/unimplemented! markers in src/"
@@ -207,7 +206,7 @@ jobs:
       # 必要 file が漏れる — これらは repo / workspace に file がある限り
       # cargo build も cargo test も clippy も preflight も全部通り、
       # crates.io から取得した利用者だけが compile 不能になる
-      # (2026-09-28 ALICE-LOL lol.gbnf、canonical template 罠 #51)
+      # (2026-09-28 ALICE-LOL lol.gbnf)
       #
       # semver-checks は baseline を build するので結果的に検出するが、
       # (a) 壊れた版を publish した後にしか分からない
