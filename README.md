@@ -4,7 +4,6 @@
 
 # ALICE Streaming Protocol (libasp)
 
-[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Rust](https://img.shields.io/badge/rust-1.70%2B-orange.svg)](https://www.rust-lang.org)
 [![Tests](https://img.shields.io/badge/tests-80_passing-brightgreen.svg)](#test-suite)
 [![FlatBuffers](https://img.shields.io/badge/FlatBuffers-cross--language-blueviolet.svg)](#features)
