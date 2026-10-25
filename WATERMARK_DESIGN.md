@@ -10,7 +10,7 @@ Embed an invisible, cryptographically-signed watermark into ALICE Streaming
 Protocol (ASP) streams. This enables:
 
 - **Origin attribution**: Prove that a stream was produced by an ALICE-powered system.
-- **License violation detection**: Identify unauthorized commercial use of AGPL-licensed code.
+- **License violation detection**: Identify unauthorized use of the code.
 - **Tampering evidence**: Detect if stream metadata has been stripped or altered.
 
 ## 2. Threat Model
@@ -120,7 +120,7 @@ Given a suspected ASP stream and the instance secret:
 
 ## 6. License
 
-This design is part of the ALICE Streaming Protocol (AGPL-3.0).
+This design is part of the ALICE Streaming Protocol (`LicenseRef-Proprietary`).
 Implementation will be feature-gated and optional.
 
 ---
