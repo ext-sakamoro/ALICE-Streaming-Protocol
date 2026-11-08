@@ -13,6 +13,7 @@ All notable changes to ALICE-Streaming-Protocol will be documented in this file.
 - `deny.toml` と `.github/workflows/security-audit.yml` の comment の libasp の licence の記述を外した (libasp は publish = false で licence の検査の対象外)
 - CI: ci.yml / fuzz.yml / security-audit.yml を `ci/**` の branch でも走らせ、ci.yml に手動実行を足し、main の run は打ち切らない concurrency にした (main に入れる前に branch で全 workflow を通すため)
 - **`alice-physics` の要求を `1` から `2` に上げた (2026-10-09)** 2.0.0 は `#[non_exhaustive]` の一括付与と enum の variant 追加を含む major bump で、caret は major を跨がないため `^1` のままでは公開済の 2.0.0 に永久に到達しない `physics_bridge` と `tests/analytic_oracle.rs` に struct literal 構築は無く、呼び出し側の変更は不要だった 実測: `cargo check --features physics --all-targets` が 0 error (lock の解決は 2.0.0)、`scripts/preflight.sh` (full) が exit 0
+- CI: 公開する文面の検査 (`Public text` workflow、`scripts/public_text.sh`) を追加 ALICE-Law の `scripts/public_text_check.py` を `.github/public-text-pin` の revision で取得し、SHA-256 が一致した時だけ使って、HEAD の全 tracked file (path と本文) と送った commit (message・追加行・追加 path) を読む 何も比較できなければ失敗する preflight でも走る
 
 ### Fixed
 - Release profile no longer sets `panic = "abort"`: PyO3 turns a Rust panic into a Python `PanicException` only when the panic can unwind, so with `abort` any panic inside a `libasp` call (a mismatched NumPy shape, an index past the frame) terminated the interpreter instead of raising
