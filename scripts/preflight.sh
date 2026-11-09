@@ -6,7 +6,7 @@
 # Run `--quick` before every push.
 #
 # usage: scripts/preflight.sh [--quick]   (--quick skips the test / bench suites)
-# generator rev e2bb3de7ed4ef9138b566d6274e62d4557010dd9
+# generator rev 3144a7f8709082360b591d89edfb2344eeb3603d
 set -euo pipefail
 cd "$(dirname "$0")/.."
 # --- heavy slot (begin) ---
@@ -588,6 +588,8 @@ has_toolchain() { grep -q "^$1" <<<"$(rustup toolchain list)"; }
 #   - fuzz.yml:fuzz:Run fuzz target (time-boxed) [target=fuzz_from_bytes_bincode] (continue-on-error, runner-only (open-ended or unprovable-bounded fuzz run))
 #   - fuzz.yml:fuzz:Report crash (informational) [target=fuzz_from_bytes_bincode] (its `if:` runs on what happened earlier on the runner)
 #   - fuzz.yml:gate:gate (reads NEEDS, a value only the runner has)
+#   - public-text.yml:public-text: uses actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 (an action this file cannot run)
+#   - public-text.yml:public-text:Public text (tree at HEAD, then the pushed commits) (no cargo / grep)
 
 need actionlint "brew install actionlint"
 need cargo-audit "cargo install cargo-audit --locked"
@@ -595,7 +597,7 @@ need cargo-deny "cargo install cargo-deny --locked"
 need cargo-hack "cargo install cargo-hack --locked"
 need cargo-machete "cargo install cargo-machete --locked"
 need cargo-semver-checks "cargo install cargo-semver-checks --locked"
-has_toolchain 1.87 || { echo "missing toolchain 1.87 (rustup toolchain install 1.87)" >&2; exit 1; }
+has_toolchain 1.88 || { echo "missing toolchain 1.88 (rustup toolchain install 1.88)" >&2; exit 1; }
 command -v python >/dev/null 2>&1 || python() { python3 "$@"; }
 
 step "ci.yml / clippy: clippy (no default features, all targets)"
@@ -622,13 +624,13 @@ relint
 step "ci.yml / msrv: cargo check on MSRV (no default features)"
 (
   gh_step ci.yml.msrv
-( export CARGO_TERM_COLOR="always" ALL_FEATURES="simd,media-stack,sync,physics,crypto,bincode-compat"; cargo +1.87 check --lib --locked --no-default-features )
+( export CARGO_TERM_COLOR="always" ALL_FEATURES="simd,media-stack,sync,physics,crypto,bincode-compat"; cargo +1.88 check --lib --locked --no-default-features )
 )
 
 step "ci.yml / msrv: cargo check on MSRV (docs.rs feature set)"
 (
   gh_step ci.yml.msrv
-( export CARGO_TERM_COLOR="always" ALL_FEATURES="simd,media-stack,sync,physics,crypto,bincode-compat"; cargo +1.87 check --lib --locked --no-default-features --features "$ALL_FEATURES" )
+( export CARGO_TERM_COLOR="always" ALL_FEATURES="simd,media-stack,sync,physics,crypto,bincode-compat"; cargo +1.88 check --lib --locked --no-default-features --features "$ALL_FEATURES" )
 )
 
 step "ci.yml / feature-powerset: Powerset (depth 2)"
@@ -813,6 +815,12 @@ if has_toolchain nightly && cargo +nightly fuzz --version >/dev/null 2>&1; then
 else
   echo 'PREFLIGHT-SKIP: fuzz.yml / fuzz: Build fuzz target [target=fuzz_from_bytes_bincode]: nightly / cargo-fuzz not installed' >&2
 fi
+)
+
+step "public-text.yml / public-text: Tests of scripts/public_text.sh (no network)"
+(
+  gh_step public-text.yml.public-text
+( python scripts/test_public_text.py )
 )
 
 if [[ $quick -eq 1 ]]; then

@@ -103,6 +103,7 @@ allow-registry = ["https://github.com/rust-lang/crates.io-index"]
 allow-git = []
 
 [sources.allow-org]
+github = ["ext-sakamoro"]
 
 # Sibling ALICE crates carry their own license. CI
 # builds some of them as MIT stubs, the local preflight sees the real crates:

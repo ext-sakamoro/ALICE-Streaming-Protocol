@@ -4,8 +4,8 @@ publish = false
 version = "1.1.0"
 edition = "2021"
 resolver = "3"
-# Verified by the CI `msrv` job (`cargo +1.87 check`, alice-codec / alice-zip require 1.87)
-rust-version = "1.87"
+# Verified by the CI `msrv` job (`cargo +1.88 check`, alice-sync / alice-identity require 1.88)
+rust-version = "1.88"
 authors = ["Moroya Sakamoto <sakamoro@alicelaw.net>"]
 description = "ALICE Streaming Protocol - High-performance video streaming codec"
 license = "LicenseRef-Proprietary"
@@ -70,14 +70,13 @@ wasm-bindgen = { version = "0.2", optional = true }
 js-sys = { version = "0.3", optional = true }
 web-sys = { version = "0.3", optional = true, features = ["console"] }
 
-# ALICE Media Stack (optional) — crates.io versions (the CI sibling stubs were
-# versioned 0.1.0 and could not satisfy `alice-physics = "1"`)
-alice-codec = { version = "0.1", optional = true, default-features = false, features = ["std"] }
+# ALICE Media Stack (optional): each repository's main branch and version; the lock records the commit
+alice-codec = { git = "https://github.com/ext-sakamoro/ALICE-Codec", branch = "main", version = "0.2.0", optional = true, default-features = false, features = ["std"] }
 # alice-voice 一時 disable (crates.io 未 publish、user 保留、1.1 で復活予定)
 # alice-voice = { path = "../ALICE-Voice", version = "0.1", optional = true, default-features = false, features = ["std"] }
-alice-sync = { version = "0.6", optional = true, default-features = false, features = ["std"] }
-alice-physics = { version = "2", optional = true, default-features = false, features = ["std"] }
-alice-crypto = { version = "0.1", optional = true, default-features = false, features = ["std"] }
+alice-sync = { git = "https://github.com/ext-sakamoro/ALICE-Sync", branch = "main", version = "0.7.0", optional = true, default-features = false, features = ["std"] }
+alice-physics = { git = "https://github.com/ext-sakamoro/ALICE-Physics", branch = "main", version = "4.0.0", optional = true, default-features = false, features = ["std"] }
+alice-crypto = { git = "https://github.com/ext-sakamoro/ALICE-Crypto", branch = "main", version = "0.6.0", optional = true, default-features = false, features = ["std"] }
 
 # Error handling
 thiserror = "2.0"

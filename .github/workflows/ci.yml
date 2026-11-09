@@ -67,18 +67,18 @@ jobs:
         run: cargo clippy --lib --no-default-features --features "python,$ALL_FEATURES" -- -D warnings
 
   msrv:
-    name: MSRV (rust-version = 1.87)
+    name: MSRV (rust-version = 1.88)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
       - name: Install MSRV toolchain
-        uses: dtolnay/rust-toolchain@1.87
+        uses: dtolnay/rust-toolchain@1.88
       - uses: Swatinem/rust-cache@v2
       # `rust-version` is only true if this compiles; bump both together
       - name: cargo check on MSRV (no default features)
-        run: cargo +1.87 check --lib --locked --no-default-features
+        run: cargo +1.88 check --lib --locked --no-default-features
       - name: cargo check on MSRV (docs.rs feature set)
-        run: cargo +1.87 check --lib --locked --no-default-features --features "$ALL_FEATURES"
+        run: cargo +1.88 check --lib --locked --no-default-features --features "$ALL_FEATURES"
 
   feature-powerset:
     name: Feature powerset (cargo-hack)

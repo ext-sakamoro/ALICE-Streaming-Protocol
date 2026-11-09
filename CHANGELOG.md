@@ -8,6 +8,9 @@ All notable changes to ALICE-Streaming-Protocol will be documented in this file.
 - `ctutils` 0.4.2 → 0.4.5 (lock のみ、RUSTSEC-2026-0385: 0.4.4 未満の mask と u128 の比較が定数時間でない) 経路は `alice-crypto` → `blake3` 1.8.7 → `digest` 0.11.3 → `ctutils` 0.4.5 の rust-version は 1.87 で、この crate の宣言 (1.87) と同じ
 
 ### Changed
+- 依存: alice-codec / alice-sync / alice-physics / alice-crypto を crates.io でなく各 repository の main branch と版 (0.2.0 / 0.7.0 / 4.0.0 / 0.6.0) で引く lock の alice-det-math は git main の 0.6.1 の 1 つだけ (これまでは crates.io の 0.3.2)、crates.io の alice-* は 0
+- MSRV: 1.87 → 1.88 (alice-sync 0.7.0 と、それが引く alice-identity が 1.88 を要求する) CI の MSRV の job も 1.88
+- `deny.toml`: git の source として `github.com/ext-sakamoro` を許可した
 - Licence: `MIT OR Apache-2.0` → `LicenseRef-Proprietary`
 - README の MIT の licence badge を外した (指す LICENSE は既に無い)
 - `deny.toml` と `.github/workflows/security-audit.yml` の comment の libasp の licence の記述を外した (libasp は publish = false で licence の検査の対象外)
