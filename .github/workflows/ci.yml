@@ -66,6 +66,23 @@ jobs:
       - name: clippy (python bindings)
         run: cargo clippy --lib --no-default-features --features "python,$ALL_FEATURES" -- -D warnings
 
+  shared-scripts:
+    name: Shared scripts (their own tests)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      # scripts/package_integrity.py and what it imports (alice_siblings_check, id_move_check,
+      # release_baseline) are shared with the other ALICE crates; their tests run here, the
+      # package itself is checked in security-audit.yml
+      - name: package_integrity (tests)
+        run: python3 scripts/test_package_integrity.py
+      - name: alice_siblings_check (tests)
+        run: python3 scripts/test_alice_siblings_check.py
+      - name: id_move_check (tests)
+        run: python3 scripts/test_id_move_check.py
+      - name: release_baseline (tests)
+        run: python3 scripts/test_release_baseline.py
+
   msrv:
     name: MSRV (rust-version = 1.88)
     runs-on: ubuntu-latest
