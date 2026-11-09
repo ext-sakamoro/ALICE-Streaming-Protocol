@@ -125,7 +125,9 @@ impl VideoEncoder {
 
         // 1. RGB → YCoCg-R (reversible color transform)
         let pixels: Vec<RGB> = rgb_data
-            .chunks_exact(3)
+            .as_chunks::<3>()
+            .0
+            .iter()
             .map(|c| RGB {
                 r: c[0],
                 g: c[1],

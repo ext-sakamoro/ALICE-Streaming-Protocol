@@ -1122,7 +1122,9 @@ fn rle_mask_round_trips_and_has_the_documented_length() {
         assert_eq!(rle_decode_mask(&rle, w, h), bits, "{name}");
         // run lengths sum to the mask length
         let total: usize = rle
-            .chunks_exact(3)
+            .as_chunks::<3>()
+            .0
+            .iter()
             .map(|t| usize::from(u16::from_le_bytes([t[0], t[1]])))
             .sum();
         assert_eq!(total, n, "{name}");

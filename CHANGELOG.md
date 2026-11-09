@@ -12,6 +12,8 @@ All notable changes to ALICE-Streaming-Protocol will be documented in this file.
 - MSRV: 1.87 → 1.88 (alice-sync 0.7.0 と、それが引く alice-identity が 1.88 を要求する) CI の MSRV の job も 1.88
 - `deny.toml`: git の source として `github.com/ext-sakamoro` を許可した
 - CI (Package integrity): `cargo package` と展開した .crate の `cargo check` を、ALICE の crate と共有する `scripts/package_integrity.py` にした (git の branch で取る依存を lock が記録した commit で patch して、同梱の lock と新しい解決の両方で build する、lock に alice-det-math があることも確かめる) script が import する `alice_siblings_check.py` / `id_move_check.py` / `release_baseline.py` と各試験も同じ bytes で置き、試験は CI の `shared-scripts` job で走らせる
+- `alice_siblings_check.py` の試験が読む `.github/actions/alice-siblings/action.yml` も共有の bytes で置いた (この crate の CI はこの action を使わない)
+- `video_codec` と試験の 3 byte ずつの区切りを `chunks_exact(3)` から `as_chunks::<3>()` にした (clippy の `chunks_exact_to_as_chunks`、MSRV 1.88 で使える)
 - lock: alice-sync を main の先端 (alice-identity 2.0.0 を引く) に上げた 古い commit の alice-sync は alice-identity ^1.2 を要求し、新しい解決で選べなかった
 - Licence: `MIT OR Apache-2.0` → `LicenseRef-Proprietary`
 - README の MIT の licence badge を外した (指す LICENSE は既に無い)
