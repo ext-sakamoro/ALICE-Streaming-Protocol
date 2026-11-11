@@ -74,7 +74,7 @@ web-sys = { version = "0.3", optional = true, features = ["console"] }
 alice-codec = { git = "https://github.com/ext-sakamoro/ALICE-Codec", branch = "main", version = "0.2.0", optional = true, default-features = false, features = ["std"] }
 # alice-voice 一時 disable (crates.io 未 publish、user 保留、1.1 で復活予定)
 # alice-voice = { path = "../ALICE-Voice", version = "0.1", optional = true, default-features = false, features = ["std"] }
-alice-sync = { git = "https://github.com/ext-sakamoro/ALICE-Sync", branch = "main", version = "0.7.0", optional = true, default-features = false, features = ["std"] }
+alice-sync = { git = "https://github.com/ext-sakamoro/ALICE-Sync", branch = "main", version = "0.8.0", optional = true, default-features = false, features = ["std"] }
 alice-physics = { git = "https://github.com/ext-sakamoro/ALICE-Physics", branch = "main", version = "4.0.0", optional = true, default-features = false, features = ["std"] }
 alice-crypto = { git = "https://github.com/ext-sakamoro/ALICE-Crypto", branch = "main", version = "0.7", optional = true, default-features = false, features = ["std"] }
 

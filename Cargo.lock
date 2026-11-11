@@ -81,8 +81,9 @@ source = "git+https://github.com/ext-sakamoro/ALICE-DetMath?branch=main#5b319bf6
 [[package]]
 name = "alice-identity"
 version = "2.0.0"
-source = "git+https://github.com/ext-sakamoro/ALICE-Identity?branch=main#7de2d526bef55d50c1d3ef527935431d10a9e6cf"
+source = "git+https://github.com/ext-sakamoro/ALICE-Identity?branch=main#771693d9c07bf6005a57f3e5984b93ef0726eec9"
 dependencies = [
+ "alice-crypto",
  "alice-sign",
 ]
 
@@ -114,8 +115,8 @@ dependencies = [
 
 [[package]]
 name = "alice-sync"
-version = "0.7.0"
-source = "git+https://github.com/ext-sakamoro/ALICE-Sync?branch=main#53e15d7056a85cf06256ddea0ffad4c3d7f5eb87"
+version = "0.8.0"
+source = "git+https://github.com/ext-sakamoro/ALICE-Sync?branch=main#a64fe2b7e49d814f68b0c554757a833b61da7c94"
 dependencies = [
  "alice-identity",
  "alice-sign",
