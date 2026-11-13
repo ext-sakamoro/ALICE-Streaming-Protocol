@@ -633,6 +633,16 @@ step "ci.yml / shared-scripts: alice_siblings_check (tests)"
 ( export CARGO_TERM_COLOR="always" ALL_FEATURES="simd,media-stack,sync,physics,crypto,bincode-compat"; python3 scripts/test_alice_siblings_check.py )
 )
 
+step "ci.yml / shared-scripts: Upstream previous identifiers (test, then whole-list uses only)"
+(
+  gh_step ci.yml.shared-scripts
+(
+  export CARGO_TERM_COLOR="always" ALL_FEATURES="simd,media-stack,sync,physics,crypto,bincode-compat"
+  python3 scripts/test_upstream_previous_ids_check.py
+  python3 scripts/upstream_previous_ids_check.py
+)
+)
+
 step "ci.yml / shared-scripts: id_move_check (tests)"
 (
   gh_step ci.yml.shared-scripts

@@ -28,6 +28,7 @@ All notable changes to ALICE-Streaming-Protocol will be documented in this file.
 - Release profile no longer sets `panic = "abort"`: PyO3 turns a Rust panic into a Python `PanicException` only when the panic can unwind, so with `abort` any panic inside a `libasp` call (a mismatched NumPy shape, an index past the frame) terminated the interpreter instead of raising
 
 ### Added
+- CI: 他の crate の `PREVIOUS_*_SEMANTICS_IDS` は一覧全体としてだけ使える (`contains` / `len` / `is_empty`、全体を回す iterator や for、引数として丸ごと渡す) とし、添字・slice のパターン・`.first` / `next` / `take` などを拒む `scripts/upstream_previous_ids_check.py` と試験を足した (ALICE-Edge と同じ中身の共有 file) 上流は major で一覧を空にする 走査した .rs が 0 件なら失敗 (ci.yml と preflight)
 - `flatbuffers_api::encode_payload` omits empty vectors (regions / motion vectors / region deltas / corrections): a D-Packet without deltas is 16 bytes smaller and byte-identical to `PacketEncoder::encode_d_packet`; the reader already treated an absent vector as empty
 - `tests/wire_roundtrip.rs`: `PacketEncoder` output parses to the same packet as `to_bytes` (D / I / S), payload helpers (`correction_count`, `total_correction_bytes`, `add_region_delta`, `dominant_color`, `as_c_packet` / `as_s_packet`), `estimated_size` per-item allowances, bincode path length / header / CRC validation
 - `.cargo/mutants.toml`: 7 documented `exclude_re` classes for output-equivalent mutants in `codec/motion.rs` (SIMD dispatch arms, symmetric pattern constants, the never-reached iteration budget, blocks outside the frame)
