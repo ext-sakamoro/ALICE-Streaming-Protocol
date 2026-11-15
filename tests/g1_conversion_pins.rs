@@ -311,10 +311,12 @@ fn the_outputs_match_the_pins() {
         "g1 pins: {} items, {differing} differ\n{report}",
         pinned.len()
     );
-    // the conversion (cos through alice-det-math) moves only the raw floating-point DCT outputs, by
-    // at most RELATIVE of a block's largest value; everything an encoder emits or a decoder shows
-    // (quantised and sparse coefficients, the stream's bytes, the decoded pixels, magnitudes,
-    // palettes) is unchanged
+    // on these pinned inputs the conversion (cos through alice-det-math) moves only the raw
+    // floating-point DCT outputs, by at most RELATIVE of a block's largest value; what an encoder
+    // emits or a decoder shows here (quantised and sparse coefficients, the stream's bytes, the
+    // decoded pixels, magnitudes, palettes) is unchanged. On other inputs a raw value that sits on a
+    // quantisation tie can round the other way, so those exact items are a measurement on these
+    // inputs, not a guarantee for every block
     assert_eq!(exact_moved, 0, "{report}");
     assert!(
         worst_relative <= RELATIVE,
