@@ -88,6 +88,11 @@ fn dct_basis_function_maps_to_a_single_coefficient() {
     // x(y, x) = cos((2x+1)uπ/2N) cos((2y+1)vπ/2N) → F(u,v) = N/2 · (1/√2 per zero index)
     let n = 8usize;
     for (u, v) in [(1usize, 0usize), (3, 2), (7, 7), (0, 5)] {
+        // the basis is built with the platform cos, independently of the det-math cos the DCT uses
+        #[allow(
+            clippy::disallowed_methods,
+            reason = "an independent reference: the oracle's basis must not share the implementation under test"
+        )]
         let block: Vec<f64> = (0..n * n)
             .map(|i| {
                 let (x, y) = ((i % n) as f64, (i / n) as f64);
@@ -211,7 +216,8 @@ fn smooth_texture(w: usize, h: usize) -> Vec<u8> {
     (0..w * h)
         .map(|i| {
             let (x, y) = ((i % w) as f64, (i / w) as f64);
-            (128.0 + 100.0 * (x * 0.21).sin() * (y * 0.17).cos()) as u8
+            (128.0 + 100.0 * alice_det_math::sin64(x * 0.21) * alice_det_math::cos64(y * 0.17))
+                as u8
         })
         .collect()
 }

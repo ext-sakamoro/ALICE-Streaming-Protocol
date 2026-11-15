@@ -48,6 +48,8 @@ serde_bytes = "0.11"
 base64 = "0.22"
 
 # Numerical computation
+# the DCT basis (cos): alice-det-math gives the same bits on every platform (ALICE-Law G1)
+alice-det-math = { git = "https://github.com/ext-sakamoro/ALICE-DetMath", branch = "main", version = "0.6" }
 ndarray = { version = "0.16", features = ["serde", "rayon"] }
 num-traits = "0.2"
 num-complex = "0.4"

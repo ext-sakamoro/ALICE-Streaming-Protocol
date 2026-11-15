@@ -286,6 +286,16 @@ fn color_distance_sq(pixel: &[u8; 3], color: &Color) -> f64 {
     db.mul_add(db, dr.mul_add(dr, dg * dg))
 }
 
+/// ⌈log₂ n⌉ in integers (0 for n ≤ 1): the depth of median cut that yields at least `n` boxes
+#[inline]
+const fn ceil_log2(n: usize) -> usize {
+    if n <= 1 {
+        0
+    } else {
+        (usize::BITS - (n - 1).leading_zeros()) as usize
+    }
+}
+
 /// Reduce color palette using median cut algorithm (alternative to k-means)
 #[must_use]
 pub fn median_cut_palette(pixels: &[u8], num_colors: usize) -> Vec<Color> {
@@ -359,7 +369,7 @@ pub fn median_cut_palette(pixels: &[u8], num_colors: usize) -> Vec<Color> {
         median_cut(right, depth + 1, max_depth, result);
     }
 
-    let max_depth = (num_colors as f64).log2().ceil() as usize;
+    let max_depth = ceil_log2(num_colors);
     let mut result = Vec::with_capacity(num_colors);
     median_cut(&mut colors, 0, max_depth, &mut result);
 
@@ -369,6 +379,47 @@ pub fn median_cut_palette(pixels: &[u8], num_colors: usize) -> Vec<Color> {
 
 #[cfg(test)]
 mod tests {
+
+    /// The integer ⌈log₂ n⌉ equals the expression it replaced, `(n as f64).log2().ceil() as usize`,
+    /// for every n up to 2^20, at 2^k − 1, 2^k, 2^k + 1 for k ≤ 48, and at 200 000 fixed
+    /// pseudo-random n below 2^49 (n = 0 gives 0 in both: −∞ saturates to 0). From 2^49 + 1 the
+    /// float expression is wrong (log2 rounds to exactly k, so the ceiling stays k) and the integer
+    /// form gives k + 1; median cut reaches that depth only with more than 2^49 pixels, so the
+    /// palettes are the same for every input that fits in memory
+    #[test]
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "the reference is the platform log2 expression this replaces"
+    )]
+    fn ceil_log2_equals_the_float_expression_it_replaced() {
+        let old = |n: usize| (n as f64).log2().ceil() as usize;
+        let mut compared = 0;
+        for n in 0..=1usize << 20 {
+            assert_eq!(ceil_log2(n), old(n), "{n}");
+            compared += 1;
+        }
+        for k in 0..=48u32 {
+            let p = 1usize << k;
+            for n in [p - 1, p, p + 1] {
+                assert_eq!(ceil_log2(n), old(n), "{n}");
+                compared += 1;
+            }
+        }
+        let mut s = 1u64;
+        for _ in 0..200_000 {
+            s = s
+                .wrapping_mul(6_364_136_223_846_793_005)
+                .wrapping_add(1_442_695_040_888_963_407);
+            let n = (s >> 15) as usize; // below 2^49
+            assert_eq!(ceil_log2(n), old(n), "{n}");
+            compared += 1;
+        }
+        assert!(compared > (1 << 20) + 200_000);
+        // where the float expression stops being the ceiling: 2^49 + 1 needs 50
+        let n = (1usize << 49) + 1;
+        assert_eq!((ceil_log2(n), old(n)), (50, 49));
+    }
+
     use super::*;
 
     #[test]

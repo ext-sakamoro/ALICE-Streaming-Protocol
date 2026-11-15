@@ -3,6 +3,7 @@
 //! High-performance 2D DCT implementation for video compression.
 //! Supports sparse coefficient encoding for ultra-low bandwidth.
 
+use alice_det_math::cos64;
 use rayon::prelude::*;
 use std::f64::consts::PI;
 
@@ -138,8 +139,8 @@ pub fn dct2d(input: &[f64], size: usize) -> Vec<f64> {
             let mut sum = 0.0;
             for y in 0..size {
                 for x in 0..size {
-                    let cos_u = ((2 * x + 1) as f64 * u as f64 * PI / (2.0 * size as f64)).cos();
-                    let cos_v = ((2 * y + 1) as f64 * v as f64 * PI / (2.0 * size as f64)).cos();
+                    let cos_u = cos64((2 * x + 1) as f64 * u as f64 * PI / (2.0 * size as f64));
+                    let cos_v = cos64((2 * y + 1) as f64 * v as f64 * PI / (2.0 * size as f64));
                     sum += input[y * size + x] * cos_u * cos_v;
                 }
             }
@@ -166,8 +167,8 @@ pub fn idct2d(input: &[f64], size: usize) -> Vec<f64> {
                     let cu = if u == 0 { 1.0 / 2.0_f64.sqrt() } else { 1.0 };
                     let cv = if v == 0 { 1.0 / 2.0_f64.sqrt() } else { 1.0 };
 
-                    let cos_u = ((2 * x + 1) as f64 * u as f64 * PI / (2.0 * size as f64)).cos();
-                    let cos_v = ((2 * y + 1) as f64 * v as f64 * PI / (2.0 * size as f64)).cos();
+                    let cos_u = cos64((2 * x + 1) as f64 * u as f64 * PI / (2.0 * size as f64));
+                    let cos_v = cos64((2 * y + 1) as f64 * v as f64 * PI / (2.0 * size as f64));
 
                     sum += cu * cv * input[v * size + u] * cos_u * cos_v;
                 }
@@ -241,7 +242,7 @@ pub fn energy_compaction(original: &[f64], reconstructed: &[f64]) -> f64 {
     let error_energy: f64 = original
         .iter()
         .zip(reconstructed.iter())
-        .map(|(&o, &r)| (o - r).powi(2))
+        .map(|(&o, &r)| (o - r) * (o - r))
         .sum();
 
     if original_energy > 0.0 {

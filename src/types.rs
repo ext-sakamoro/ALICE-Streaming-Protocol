@@ -511,7 +511,10 @@ impl MotionVector {
     #[inline]
     #[must_use]
     pub fn magnitude(&self) -> f32 {
-        (self.dx as f32).hypot(self.dy as f32)
+        // dx² + dy² is exact in f64 (both below 2^15 in magnitude), and sqrt and the narrowing
+        // to f32 are correctly rounded by IEEE 754, so the result is the same on every platform
+        let (dx, dy) = (f64::from(self.dx), f64::from(self.dy));
+        (dx * dx + dy * dy).sqrt() as f32
     }
 
     /// Convert to compact format (for bandwidth optimization)

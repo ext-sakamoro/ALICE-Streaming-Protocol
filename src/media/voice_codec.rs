@@ -599,7 +599,7 @@ mod tests {
         (0..n_samples)
             .map(|i| {
                 let t = i as f32 / sample_rate as f32;
-                (2.0 * std::f32::consts::PI * 200.0 * t).sin() * 0.5
+                alice_det_math::sin(2.0 * std::f32::consts::PI * 200.0 * t) * 0.5
             })
             .collect()
     }

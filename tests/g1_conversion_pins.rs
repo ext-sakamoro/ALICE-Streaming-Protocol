@@ -265,21 +265,8 @@ fn pins() -> Vec<(String, String, String)> {
         .collect()
 }
 
-/// ulp distance of two f64 bit patterns of the same sign (or both zero)
-fn ulp64(a: u64, b: u64) -> u64 {
-    let (fa, fb) = (f64::from_bits(a), f64::from_bits(b));
-    if fa == fb {
-        return 0;
-    }
-    let key = |x: u64| {
-        if x >> 63 == 1 {
-            -((x & !(1 << 63)) as i128)
-        } else {
-            x as i128
-        }
-    };
-    key(a).abs_diff(key(b)) as u64
-}
+/// The most a raw DCT output may move, relative to its block's largest value
+const RELATIVE: f64 = 2e-15;
 
 #[test]
 fn the_outputs_match_the_pins() {
@@ -289,6 +276,8 @@ fn the_outputs_match_the_pins() {
     assert!(pinned.len() > 100, "{}", pinned.len());
     let mut report = String::new();
     let mut differing = 0;
+    let mut exact_moved = 0;
+    let mut worst_relative = 0.0f64;
     for ((pn, pk, pv), (nn, nk, nv)) in pinned.iter().zip(&now) {
         assert_eq!((pn.as_str(), pk.as_str()), (nn.as_str(), *nk), "item order");
         if pv == nv {
@@ -296,19 +285,19 @@ fn the_outputs_match_the_pins() {
         }
         differing += 1;
         let detail = if *nk == "f64" {
-            let max = pv
-                .split(',')
-                .zip(nv.split(','))
-                .map(|(a, b)| {
-                    ulp64(
-                        u64::from_str_radix(a, 16).unwrap(),
-                        u64::from_str_radix(b, 16).unwrap(),
-                    )
-                })
-                .max()
-                .unwrap_or(0);
-            format!("max {max} ulp")
+            let f = |h: &str| f64::from_bits(u64::from_str_radix(h, 16).unwrap());
+            let old: Vec<f64> = pv.split(',').map(f).collect();
+            let new: Vec<f64> = nv.split(',').map(f).collect();
+            let scale = old.iter().fold(0.0f64, |m, x| m.max(x.abs()));
+            let diff = old
+                .iter()
+                .zip(&new)
+                .fold(0.0f64, |m, (a, b)| m.max((a - b).abs()));
+            let relative = diff / scale;
+            worst_relative = worst_relative.max(relative);
+            format!("max |delta| {diff:e} (relative to the largest value {relative:e})")
         } else {
+            exact_moved += 1;
             let n = pv
                 .split(',')
                 .zip(nv.split(','))
@@ -322,7 +311,15 @@ fn the_outputs_match_the_pins() {
         "g1 pins: {} items, {differing} differ\n{report}",
         pinned.len()
     );
-    assert_eq!(differing, 0, "{report}");
+    // the conversion (cos through alice-det-math) moves only the raw floating-point DCT outputs, by
+    // at most RELATIVE of a block's largest value; everything an encoder emits or a decoder shows
+    // (quantised and sparse coefficients, the stream's bytes, the decoded pixels, magnitudes,
+    // palettes) is unchanged
+    assert_eq!(exact_moved, 0, "{report}");
+    assert!(
+        worst_relative <= RELATIVE,
+        "{worst_relative:e} > {RELATIVE:e}\n{report}"
+    );
 }
 
 /// The stream the platform libm path wrote (`tests/fixtures/g1/iframe.bin`) still decodes, and to the
@@ -350,3 +347,25 @@ fn the_stream_written_before_decodes_to_the_pinned_pixels() {
     );
     assert_eq!(differ, 0);
 }
+
+/// After the conversion the DCT goes through alice-det-math, so its outputs are the same bits on
+/// every platform: the SHA-256 of every pinned f64 item computed now is one constant, checked on
+/// each OS of the CI matrix (with the platform cos it differed between libms)
+#[test]
+fn the_dct_bits_are_the_same_on_every_platform() {
+    let mut all = String::new();
+    let mut n = 0;
+    for (name, kind, values) in items() {
+        if kind == "f64" {
+            all.push_str(&name);
+            all.push(' ');
+            all.push_str(&values);
+            all.push('\n');
+            n += 1;
+        }
+    }
+    assert_eq!(n, 30, "f64 items hashed");
+    assert_eq!(sha256_hex(all.as_bytes()), DCT_BITS_SHA256);
+}
+
+const DCT_BITS_SHA256: &str = "5f983c53eea5aac8605f80a4883c0c2ad9e5f913db388c1f023f982ebf1a51b7";
