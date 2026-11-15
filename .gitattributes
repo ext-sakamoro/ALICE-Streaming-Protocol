@@ -1,0 +1,4 @@
+# bytes captured from bincode 1.3.3 and pinned by sha256: no line-ending conversion
+tests/fixtures/bincode1/*.bin binary
+# the sum list is text, kept with LF so the names it lists carry no carriage return
+tests/fixtures/bincode1/SHA256SUMS text eol=lf

@@ -96,6 +96,7 @@ features = ["simd", "media-stack", "sync", "physics", "crypto", "bincode-compat"
 [dev-dependencies]
 criterion = { version = "0.5", features = ["html_reports"] }
 proptest = "1.5"
+sha2 = "0.10"
 
 [[bench]]
 name = "motion_estimation"

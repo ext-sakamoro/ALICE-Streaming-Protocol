@@ -869,6 +869,7 @@ dependencies = [
  "rayon",
  "serde",
  "serde_bytes",
+ "sha2",
  "thiserror",
  "wasm-bindgen",
  "web-sys",
