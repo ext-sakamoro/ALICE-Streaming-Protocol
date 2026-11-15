@@ -8,6 +8,7 @@ All notable changes to ALICE-Streaming-Protocol will be documented in this file.
 - `ctutils` 0.4.2 → 0.4.5 (lock のみ、RUSTSEC-2026-0385: 0.4.4 未満の mask と u128 の比較が定数時間でない) 経路は `alice-crypto` → `blake3` 1.8.7 → `digest` 0.11.3 → `ctutils` 0.4.5 の rust-version は 1.87 で、この crate の宣言 (1.87) と同じ
 
 ### Changed
+- 依存 (lock のみ): alice-sync を ALICE-Sync main 82ff260 (0.8.0 のまま) に、それが要る alice-identity を 2.0.0 から 3.0.0 (154ab99) に上げた 他の package は動かしていない (alice-crypto / alice-sign は元の rev) 以前の lock の alice-sync (a64fe2b) は alice-identity ^2 を要るので、新しく解決すると Identity の main (3.0.0) と合わず package の検査が通らなかった libasp の公開 API と wire は変わらない: `sync` feature が見せるのは `alice_sync::Event` / `EventKind` だけで、src/event.rs は両 commit の間で変わっていない (Identity の型は libasp の API に出ない)
 - 依存: alice-sync を 0.8.0 に上げた (main branch から) この crate が使う `Event` / `EventKind::Motion` / `EventKind::Spawn` は 0.8 で変わっておらず、公開 API と packet の bytes は変わらない
 - 依存: alice-crypto を 0.7 に上げた (`std` の API は同じ、0.7 は module ごとの feature を足した版)
 - 依存: alice-codec / alice-sync / alice-physics / alice-crypto を crates.io でなく各 repository の main branch と版 (0.2.0 / 0.7.0 / 4.0.0 / 0.6.0) で引く lock の alice-det-math は git main の 0.6.1 の 1 つだけ (これまでは crates.io の 0.3.2)、crates.io の alice-* は 0
