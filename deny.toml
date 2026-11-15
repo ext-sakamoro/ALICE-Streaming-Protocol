@@ -24,11 +24,7 @@ db-urls = ["https://github.com/rustsec/advisory-db"]
 version = 2
 yanked = "deny"
 ignore = [
-    # bincode 1.x unmaintained
-    # libasp は bincode-compat feature 経由で legacy serialization を保持
-    # bincode 2.x への移行は breaking change のため v2.0 で対応予定
-    # DoS 対策として `.with_limit::<N>()` 相当の入力サイズ上限を採用
-    "RUSTSEC-2025-0141",
+    # (bincode RUSTSEC-2025-0141: the bincode-compat path uses alice-serial's bincode1, bincode left)
     # (pyo3 RUSTSEC-2025-0020 / 2026-0177 は 1.1.0 で pyo3 0.29 に上げて解消)
 ]
 

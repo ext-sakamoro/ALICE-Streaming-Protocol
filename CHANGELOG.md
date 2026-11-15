@@ -5,6 +5,9 @@ All notable changes to ALICE-Streaming-Protocol will be documented in this file.
 ## [Unreleased]
 
 ### Security
+- `bincode-compat` は bincode crate を使わず、alice-serial の `bincode1` で bincode 1 の layout を読み書きする bincode (RUSTSEC-2025-0141、unmaintained) は依存 graph から消え、`deny.toml` と `cargo audit --ignore` の除外を外した `scripts/no_bincode_in_graph.sh` が全 feature の依存 graph と Cargo.lock に bincode が戻ると落ちる (0 package も落ちる)
+- 変わらないもの: feature 名 `bincode-compat`、関数 `to_bytes_bincode` / `write_to_buffer_bincode` / `from_bytes_bincode`、wire の byte (`tests/fixtures/bincode1/` が bincode 1.3.3 で書いた I / D / C / S Packet を固定、I と D は `sdf_scene` / `sdf_delta` / `person_mask` を運ぶ) この経路は FlatBuffers が運べない 3 つの field の唯一の wire
+- 変わったもの: payload (header と checksum の間) の後ろに残る byte を拒む (bincode 1 は無視していた)、payload 内の長さは payload の byte 数で上限を掛けてから確保する、入れ子は `alice_serial::bincode1::DEFAULT_MAX_DEPTH` (payload の型は自分を入れ子にしない、SDF の scene は ASDF の byte のまま運ばれ ALICE-SDF が decode する) 試験: 長さを偽った payload と末尾に 1 byte 足した payload を拒む
 - `ctutils` 0.4.2 → 0.4.5 (lock のみ、RUSTSEC-2026-0385: 0.4.4 未満の mask と u128 の比較が定数時間でない) 経路は `alice-crypto` → `blake3` 1.8.7 → `digest` 0.11.3 → `ctutils` 0.4.5 の rust-version は 1.87 で、この crate の宣言 (1.87) と同じ
 
 ### Changed

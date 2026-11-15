@@ -181,7 +181,8 @@ payloads: quality / palette / regions / animation (I), motion vectors / global m
 (D), ROI corrections with pixel data and compression format (C), all eight sync commands with their
 data union (S) The hybrid-streaming fields (`sdf_scene`, `sdf_delta`, `person_mask`) are not in the
 schema: `to_bytes` returns `AspError::SerializationError` for them and they travel over the
-`bincode-compat` path (`write_to_buffer_bincode`) `tests/wire_roundtrip.rs` is the contract
+`bincode-compat` path (`write_to_buffer_bincode`, the bincode 1 layout written by alice-serial's
+`bincode1`; `tests/bincode1_fixtures.rs` pins its bytes) `tests/wire_roundtrip.rs` is the contract
 
 ## Cross-Language Support
 
@@ -466,7 +467,7 @@ pub struct MotionVectorCompact {
 | `python` *(default)* | pyo3, numpy | Zero-copy Python bindings |
 | `wasm` | wasm-bindgen | WebAssembly support |
 | `simd` | — | Explicit SIMD (auto-detected on most platforms) |
-| `bincode-compat` | bincode | Legacy Rust-only serialization |
+| `bincode-compat` | alice-serial | Rust-only serialization in the bincode 1 layout (the only wire for `sdf_scene` / `sdf_delta` / `person_mask`) |
 | `codec` | alice-codec | Video codec (3D wavelet + rANS) |
 | `voice` | alice-voice | Voice codec (LPC parametric) — not declared in 1.x (alice-voice not on crates.io) |
 | `media-stack` | codec | Media pipeline (video; voice rejoins when `alice-voice` is published) |

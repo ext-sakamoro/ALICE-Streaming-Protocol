@@ -25,7 +25,7 @@ default = []
 python = ["pyo3", "numpy"]
 wasm = ["wasm-bindgen", "js-sys", "web-sys"]
 simd = []
-bincode-compat = ["dep:bincode"]  # Legacy Rust-only serialization
+bincode-compat = ["dep:alice-serial"]  # Rust-only serialization in the bincode 1 layout (the only wire for sdf_scene / sdf_delta / person_mask)
 codec = ["dep:alice-codec"]       # ALICE-Codec (wavelet + rANS) integration
 # voice feature は alice-voice 未 publish のため 1.0.0 で一時 disable
 # voice = ["dep:alice-voice"]       # ALICE-Voice (LPC parametric) integration
@@ -39,8 +39,8 @@ all-bridges = ["sync", "physics", "crypto"]  # All integration bridges
 # Serialization - FlatBuffers (required, cross-language, zero-copy)
 flatbuffers = "24.3"
 
-# Serialization - bincode (optional, Rust-only legacy support)
-bincode = { version = "1.3", optional = true }
+# The bincode 1 layout (optional, Rust-only) without the bincode crate: alice-serial's bincode1
+alice-serial = { git = "https://github.com/ext-sakamoro/ALICE-Serial", branch = "main", version = "0.2", optional = true, default-features = false, features = ["serde"] }
 
 # Serialization - Common
 serde = { version = "1.0", features = ["derive"] }

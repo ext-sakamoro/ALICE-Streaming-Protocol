@@ -105,6 +105,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "alice-serial"
+version = "0.2.0"
+source = "git+https://github.com/ext-sakamoro/ALICE-Serial?branch=main#4a449740d8cce4f028ca777708cd15e244295c49"
+dependencies = [
+ "serde",
+]
+
+[[package]]
 name = "alice-sign"
 version = "0.1.0"
 source = "git+https://github.com/ext-sakamoro/ALICE-Sign?branch=main#8c8d1eebf4ef9fc4059dae08779f8846e832df5e"
@@ -173,15 +181,6 @@ name = "base64ct"
 version = "1.8.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2af50177e190e07a26ab74f8b1efbfe2ef87da2116221318cb1c2e82baf7de06"
-
-[[package]]
-name = "bincode"
-version = "1.3.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b1f45e9417d87227c7a56d22e471c6206462cba514c7590c09aff4cf6d1ddcad"
-dependencies = [
- "serde",
-]
 
 [[package]]
 name = "bit-set"
@@ -852,9 +851,9 @@ dependencies = [
  "alice-codec",
  "alice-crypto",
  "alice-physics",
+ "alice-serial",
  "alice-sync",
  "base64",
- "bincode",
  "bytemuck",
  "criterion",
  "flatbuffers",

@@ -166,3 +166,33 @@ fn writing_the_same_packet_again_gives_the_same_bytes() {
         }
     }
 }
+
+/// The C-Packet fixture with its payload changed by `f`, the checksum recomputed.
+fn c_packet_with(f: impl FnOnce(&mut Vec<u8>)) -> Vec<u8> {
+    let b = read("c_packet.bin");
+    let body_end = b.len() - 4;
+    let mut body = b[..body_end].to_vec();
+    f(&mut body);
+    let crc = libasp::crc32(&body).to_be_bytes();
+    body.extend_from_slice(&crc);
+    body
+}
+
+#[test]
+fn a_length_past_the_payload_is_refused_before_anything_is_sized() {
+    // the C payload is `ref_sequence: u32` then the `corrections` count (u64)
+    let at = libasp::AspPacketHeader::SIZE + 4;
+    let forged = c_packet_with(|b| b[at..at + 8].copy_from_slice(&u64::MAX.to_le_bytes()));
+    assert!(AspPacket::from_bytes_bincode(&forged).is_err());
+    let forged = c_packet_with(|b| b[at..at + 8].copy_from_slice(&(1u64 << 40).to_le_bytes()));
+    assert!(AspPacket::from_bytes_bincode(&forged).is_err());
+}
+
+#[test]
+fn a_payload_with_bytes_after_the_value_is_refused() {
+    // the payload is all the bytes between the header and the checksum; bincode 1 ignored
+    // extra bytes there, this does not
+    assert!(AspPacket::from_bytes_bincode(&read("c_packet.bin")).is_ok());
+    let longer = c_packet_with(|b| b.push(0));
+    assert!(AspPacket::from_bytes_bincode(&longer).is_err());
+}

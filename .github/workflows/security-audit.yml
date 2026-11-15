@@ -85,14 +85,10 @@ jobs:
         run: cargo install cargo-audit --locked
 
       # advisory-db は audit 実行時に自動取得 yanked crate は deny
-      # : unmaintained ignores は deny.toml と同期させる
-      # - RUSTSEC-2025-0141: bincode 1.x unmaintained
-      
-      
+      # : unmaintained ignores は deny.toml と同期させる (今は無い)
       - name: Run cargo audit
         run: |
-          cargo audit --deny yanked \
-            --ignore RUSTSEC-2025-0141
+          cargo audit --deny yanked
 
   deny:
     needs: changes

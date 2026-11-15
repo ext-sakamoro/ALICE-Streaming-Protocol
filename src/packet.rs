@@ -967,6 +967,16 @@ impl PacketEncoder {
 // Legacy bincode support (optional)
 // =============================================================================
 
+/// The largest payload the `bincode-compat` path writes (the header records its length as a
+/// `u32`). A decode reads exactly the payload between the header and the checksum: a length
+/// inside it is checked against those bytes, and bytes after the value are refused.
+#[cfg(feature = "bincode-compat")]
+const BINCODE_PAYLOAD_LIMIT: usize = u32::MAX as usize;
+
+// The bincode 1 layout through `alice_serial::bincode1` (the bytes bincode 1.3.3 wrote; see
+// tests/fixtures/bincode1). The payload types do not nest themselves, so the default depth
+// bound (`alice_serial::bincode1::DEFAULT_MAX_DEPTH`) is far above any packet; an SDF scene
+// travels as opaque ASDF bytes (`SdfSceneDescriptor::asdf_data`) and is decoded by ALICE-SDF.
 #[cfg(feature = "bincode-compat")]
 impl AspPacket {
     /// Serialize packet to bytes using bincode (Rust-only, legacy)
@@ -998,19 +1008,19 @@ impl AspPacket {
         let payload_start = AspPacketHeader::SIZE;
         match &self.payload {
             AspPayload::IPacket(p) => {
-                bincode::serialize_into(&mut *buffer, p)
+                alice_serial::bincode1::encode_into(buffer, p, BINCODE_PAYLOAD_LIMIT)
                     .map_err(|e| AspError::SerializationError(e.to_string()))?;
             }
             AspPayload::DPacket(p) => {
-                bincode::serialize_into(&mut *buffer, p)
+                alice_serial::bincode1::encode_into(buffer, p, BINCODE_PAYLOAD_LIMIT)
                     .map_err(|e| AspError::SerializationError(e.to_string()))?;
             }
             AspPayload::CPacket(p) => {
-                bincode::serialize_into(&mut *buffer, p)
+                alice_serial::bincode1::encode_into(buffer, p, BINCODE_PAYLOAD_LIMIT)
                     .map_err(|e| AspError::SerializationError(e.to_string()))?;
             }
             AspPayload::SPacket(p) => {
-                bincode::serialize_into(&mut *buffer, p)
+                alice_serial::bincode1::encode_into(buffer, p, BINCODE_PAYLOAD_LIMIT)
                     .map_err(|e| AspError::SerializationError(e.to_string()))?;
             }
         };
@@ -1065,23 +1075,27 @@ impl AspPacket {
 
         let payload = match header.packet_type {
             PacketType::IPacket => {
-                let p: IPacketPayload = bincode::deserialize(payload_data)
-                    .map_err(|e| AspError::DeserializationError(e.to_string()))?;
+                let p: IPacketPayload =
+                    alice_serial::bincode1::from_slice(payload_data, payload_data.len())
+                        .map_err(|e| AspError::DeserializationError(e.to_string()))?;
                 AspPayload::IPacket(p)
             }
             PacketType::DPacket => {
-                let p: DPacketPayload = bincode::deserialize(payload_data)
-                    .map_err(|e| AspError::DeserializationError(e.to_string()))?;
+                let p: DPacketPayload =
+                    alice_serial::bincode1::from_slice(payload_data, payload_data.len())
+                        .map_err(|e| AspError::DeserializationError(e.to_string()))?;
                 AspPayload::DPacket(p)
             }
             PacketType::CPacket => {
-                let p: CPacketPayload = bincode::deserialize(payload_data)
-                    .map_err(|e| AspError::DeserializationError(e.to_string()))?;
+                let p: CPacketPayload =
+                    alice_serial::bincode1::from_slice(payload_data, payload_data.len())
+                        .map_err(|e| AspError::DeserializationError(e.to_string()))?;
                 AspPayload::CPacket(p)
             }
             PacketType::SPacket => {
-                let p: SPacketPayload = bincode::deserialize(payload_data)
-                    .map_err(|e| AspError::DeserializationError(e.to_string()))?;
+                let p: SPacketPayload =
+                    alice_serial::bincode1::from_slice(payload_data, payload_data.len())
+                        .map_err(|e| AspError::DeserializationError(e.to_string()))?;
                 AspPayload::SPacket(p)
             }
         };
