@@ -2,3 +2,6 @@
 tests/fixtures/bincode1/*.bin binary
 # the sum list is text, kept with LF so the names it lists carry no carriage return
 tests/fixtures/bincode1/SHA256SUMS text eol=lf
+# G1 conversion pins: the stream bytes as written, the pin list as LF text
+tests/fixtures/g1/*.bin binary
+tests/fixtures/g1/pins.txt text eol=lf
